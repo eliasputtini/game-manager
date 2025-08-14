@@ -80,6 +80,10 @@ export default function Home() {
   const [draggedItem, setDraggedItem] = useState<DraggedItem | null>(null);
   const [dragOver, setDragOver] = useState<string>("");
 
+  // Add these new state variables at the top with other useState declarations
+  const [quantities, setQuantities] = useState<{ [key: string]: number }>({});
+  const [prices, setPrices] = useState<{ [key: string]: number }>({});
+
   const handleSearch = (query: string) => {
     setSearchQuery(query);
     if (query.trim() === "") {
@@ -176,6 +180,18 @@ export default function Home() {
         setTargetItems((prev) => [...prev, item]);
       }
     }
+  };
+
+  const calculateItemTotal = (itemId: string) => {
+    const quantity = quantities[itemId] || 0;
+    const price = prices[itemId] || 0;
+    return quantity * price;
+  };
+
+  const calculateGrandTotal = () => {
+    return [...sourceItems, ...targetItems].reduce((total, item) => {
+      return total + calculateItemTotal(item.id);
+    }, 0);
   };
 
   return (
@@ -336,6 +352,114 @@ export default function Home() {
               )}
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Table Section */}
+      <div className="max-w-6xl mx-auto mt-16">
+        <div className="bg-white/95 backdrop-blur rounded-2xl p-6 shadow-xl border border-white/20">
+          <h2 className="text-xl font-semibold mb-6 text-center text-gray-800">
+            📊 Resumo dos Itens
+          </h2>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm text-left text-gray-600">
+              <thead className="text-xs uppercase bg-gray-100">
+                <tr>
+                  <th className="px-6 py-3 rounded-tl-lg">ID</th>
+                  <th className="px-6 py-3">Título</th>
+                  <th className="px-6 py-3">Categoria</th>
+                  <th className="px-6 py-3">Status</th>
+                  <th className="px-6 py-3">Quantidade</th>
+                  <th className="px-6 py-3">Preço (R$)</th>
+                  <th className="px-6 py-3 rounded-tr-lg">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[...sourceItems, ...targetItems].map((item) => (
+                  <tr
+                    key={item.id}
+                    className="border-b border-gray-200 hover:bg-gray-50"
+                  >
+                    <td className="px-6 py-4 font-medium">{item.id}</td>
+                    <td className="px-6 py-4">{item.title}</td>
+                    <td className="px-6 py-4">
+                      <span className="px-2 py-1 text-xs bg-indigo-100 text-indigo-700 rounded-full">
+                        {item.category}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span
+                        className={`px-2 py-1 text-xs rounded-full ${
+                          sourceItems.find((source) => source.id === item.id)
+                            ? "bg-green-100 text-green-700"
+                            : "bg-blue-100 text-blue-700"
+                        }`}
+                      >
+                        {sourceItems.find((source) => source.id === item.id)
+                          ? "Disponível"
+                          : "Em Destino"}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <input
+                        type="number"
+                        min="0"
+                        value={quantities[item.id] || ""}
+                        onChange={(e) =>
+                          setQuantities({
+                            ...quantities,
+                            [item.id]: Number(e.target.value),
+                          })
+                        }
+                        className="w-20 px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                    </td>
+                    <td className="px-6 py-4">
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={prices[item.id] || ""}
+                        onChange={(e) =>
+                          setPrices({
+                            ...prices,
+                            [item.id]: Number(e.target.value),
+                          })
+                        }
+                        className="w-24 px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                    </td>
+                    <td className="px-6 py-4 font-medium">
+                      R$ {calculateItemTotal(item.id).toFixed(2)}
+                    </td>
+                  </tr>
+                ))}
+                {sourceItems.length === 0 && targetItems.length === 0 && (
+                  <tr>
+                    <td
+                      colSpan={7}
+                      className="px-6 py-4 text-center text-gray-500 italic"
+                    >
+                      Nenhum item adicionado ainda
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Total Section */}
+          {(sourceItems.length > 0 || targetItems.length > 0) && (
+            <div className="mt-6 flex justify-end">
+              <div className="bg-gray-100 px-6 py-4 rounded-lg">
+                <span className="text-gray-700 font-medium">Total Geral: </span>
+                <span className="text-lg font-bold text-gray-900">
+                  R$ {calculateGrandTotal().toFixed(2)}
+                </span>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
