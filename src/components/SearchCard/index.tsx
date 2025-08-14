@@ -1,6 +1,12 @@
+import { Game } from "@/types";
 import React from "react";
 
-const SearchCard = ({ card, onAdd }) => (
+interface SearchCardProps {
+  card: Game;
+  onAdd: (card: Game) => void;
+}
+
+const SearchCard: React.FC<SearchCardProps> = ({ card, onAdd }) => (
   <div
     className="p-2 bg-gradient-to-br from-indigo-50 to-indigo-100 border border-indigo-200 rounded-xl cursor-pointer transition-all duration-300 hover:shadow-lg hover:scale-105 group relative"
     onClick={() => onAdd(card)}

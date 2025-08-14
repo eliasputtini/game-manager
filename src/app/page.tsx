@@ -2,13 +2,14 @@
 
 import { useState } from "react";
 import Image from "next/image";
+import { Game, DraggedItem } from "@/types";
 
 import SearchCard from "@/components/SearchCard";
 import DragCard from "@/components/DragCard";
 
 export default function Home() {
-  // Base de dados de Jogos disponíveis para busca
-  const availableJogos = [
+  // Type the availableJogos array
+  const availableJogos: Game[] = [
     {
       id: "game1",
       title: "🚗 Gran Turismo",
@@ -72,14 +73,14 @@ export default function Home() {
     },
   ];
 
-  const [sourceItems, setSourceItems] = useState([]);
-  const [targetItems, setTargetItems] = useState([]);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState([]);
-  const [draggedItem, setDraggedItem] = useState(null);
-  const [dragOver, setDragOver] = useState("");
+  const [sourceItems, setSourceItems] = useState<Game[]>([]);
+  const [targetItems, setTargetItems] = useState<Game[]>([]);
+  const [searchQuery, setSearchQuery] = useState<string>("");
+  const [searchResults, setSearchResults] = useState<Game[]>([]);
+  const [draggedItem, setDraggedItem] = useState<DraggedItem | null>(null);
+  const [dragOver, setDragOver] = useState<string>("");
 
-  const handleSearch = (query) => {
+  const handleSearch = (query: string) => {
     setSearchQuery(query);
     if (query.trim() === "") {
       setSearchResults([]);
@@ -101,7 +102,7 @@ export default function Home() {
   };
 
   // Função para adicionar card da busca aos itens disponíveis
-  const addCardToSource = (card) => {
+  const addCardToSource = (card: Game) => {
     setSourceItems((prev) => [...prev, card]);
     // Remove da busca após adicionar
     setSearchResults((prev) => prev.filter((item) => item.id !== card.id));
@@ -117,7 +118,7 @@ export default function Home() {
     setDragOver("");
   };
 
-  const handleDragStart = (e, item) => {
+  const handleDragStart = (e: React.DragEvent<HTMLDivElement>, item: Game) => {
     // Pequeno delay para garantir que o drag iniciou corretamente
     setTimeout(() => {
       setDraggedItem(item);
@@ -131,13 +132,13 @@ export default function Home() {
     setTimeout(clearDragState, 100);
   };
 
-  const handleDragOver = (e, area) => {
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>, area: string) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
     setDragOver(area);
   };
 
-  const handleDragLeave = (e) => {
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
     // Melhora a detecção de saída da área
     const rect = e.currentTarget.getBoundingClientRect();
     const x = e.clientX;
@@ -148,7 +149,10 @@ export default function Home() {
     }
   };
 
-  const handleDrop = (e, targetArea) => {
+  const handleDrop = (
+    e: React.DragEvent<HTMLDivElement>,
+    targetArea: string
+  ) => {
     e.preventDefault();
     clearDragState();
 
@@ -266,7 +270,7 @@ export default function Home() {
                 : "border-gray-300"
             }`}
             onDragOver={(e) => handleDragOver(e, "source")}
-            onDragLeave={(e) => handleDragLeave(e, "source")}
+            onDragLeave={(e) => handleDragLeave(e)}
             onDrop={(e) => handleDrop(e, "source")}
           >
             <div className="space-y-4">
@@ -310,7 +314,7 @@ export default function Home() {
                 : "border-gray-300"
             }`}
             onDragOver={(e) => handleDragOver(e, "target")}
-            onDragLeave={(e) => handleDragLeave(e, "target")}
+            onDragLeave={(e) => handleDragLeave(e)}
             onDrop={(e) => handleDrop(e, "target")}
           >
             <div className="space-y-4">
