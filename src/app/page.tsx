@@ -137,7 +137,7 @@ export default function Home() {
     setDragOver(area);
   };
 
-  const handleDragLeave = (e, area) => {
+  const handleDragLeave = (e) => {
     // Melhora a detecção de saída da área
     const rect = e.currentTarget.getBoundingClientRect();
     const x = e.clientX;
@@ -236,7 +236,7 @@ export default function Home() {
 
           {searchQuery && searchResults.length === 0 && (
             <div className="text-center text-gray-500 italic py-8">
-              Nenhum card encontrado para "{searchQuery}"
+              Nenhum card encontrado para &quot;{searchQuery}&quot;
             </div>
           )}
 
