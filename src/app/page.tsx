@@ -12,6 +12,7 @@ import {
 import SearchCard from "@/components/SearchCard";
 import DragCard from "@/components/DragCard";
 import ItemsTable from "@/components/ItemsTable";
+import Footer from "@/components/Footer";
 
 export default function Home() {
   // Searches now use the external API only; local availableJogos removed
@@ -28,6 +29,8 @@ export default function Home() {
   const [prices, setPrices] = useState<{ [key: string]: number }>({});
   // Debounce state
   const [debouncedQuery, setDebouncedQuery] = useState<string>("");
+  // Loading state for API search
+  const [isLoading, setIsLoading] = useState<boolean>(false);
 
   // Platform filter toggles: PS1 (10) and PS2 (11)
   const [includePS1, setIncludePS1] = useState<boolean>(true);
@@ -74,11 +77,13 @@ export default function Home() {
   // Perform the API search
   const performSearch = useCallback(async (query: string) => {
     if (query === "") {
+      setIsLoading(false);
       setSearchResults([]);
       return;
     }
 
     try {
+      setIsLoading(true);
       // Decide platforms and regions based on toggles
       const selectedPlatforms: (number | undefined)[] =
         includePS1Ref.current && includePS2Ref.current
@@ -125,6 +130,8 @@ export default function Home() {
     } catch (error) {
       console.error("Error searching games:", error);
       setSearchResults([]);
+    } finally {
+      setIsLoading(false);
     }
   }, []);
 
@@ -365,9 +372,18 @@ export default function Home() {
             </div>
           )}
 
-          {searchQuery && searchResults.length === 0 && (
+          {isLoading && (
             <div className="text-center text-gray-500 italic py-8">
-              Nenhum card encontrado para &quot;{searchQuery}&quot;
+              <div className="flex items-center justify-center gap-3">
+                <span className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-gray-300 border-t-indigo-500" />
+                Carregando jogos...
+              </div>
+            </div>
+          )}
+
+          {searchQuery && !isLoading && searchResults.length === 0 && (
+            <div className="text-center text-gray-500 italic py-8">
+              Nenhum jogo encontrado para &quot;{searchQuery}&quot;
             </div>
           )}
 
@@ -478,54 +494,7 @@ export default function Home() {
         calculateGrandTotal={calculateGrandTotal}
       />
 
-      {/* Footer */}
-      <footer className="max-w-6xl mx-auto mt-16 flex gap-6 flex-wrap items-center justify-center text-sm">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4 text-gray-600 hover:text-gray-800"
-          href="https://nextjs.org/learn"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4 text-gray-600 hover:text-gray-800"
-          href="https://vercel.com/templates?framework=next.js"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4 text-gray-600 hover:text-gray-800"
-          href="https://nextjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+      <Footer />
     </div>
   );
 }
