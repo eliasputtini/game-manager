@@ -1,6 +1,3 @@
-const GAMES_DB_API_KEY = 'ae1ab009fcfaaea637faf8c11efadc0dfa1ac0f9fe86c86e2b0031728b9873e2';
-const GAMES_DB_BASE_URL = 'https://api.thegamesdb.net/v1.1';
-
 export interface GamesDBGame {
   id: number;
   game_title: string;
