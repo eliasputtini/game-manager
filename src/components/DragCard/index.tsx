@@ -1,4 +1,5 @@
 import React from "react";
+import Image from "next/image";
 import { Game, DraggedItem } from "@/types";
 
 interface DragCardProps {
@@ -40,12 +41,37 @@ const DragCard: React.FC<DragCardProps> = ({
       zIndex: isDragging ? 1000 : 1,
     }}
   >
-    <h3 className="text-lg font-semibold mb-2 text-gray-800 pointer-events-none">
-      {item.title}
-    </h3>
-    <p className="text-sm text-gray-600 pointer-events-none">
-      {item.description}
-    </p>
+    <div className="flex items-start gap-3">
+      {item.imageUrl ? (
+        <div className="shrink-0 overflow-hidden border border-gray-200 bg-white">
+          <Image
+            src={item.imageUrl}
+            alt={item.title}
+            width={64}
+            height={64}
+            className="object-cover"
+          />
+        </div>
+      ) : null}
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center justify-between gap-2">
+          <h3 className="text-lg font-semibold mb-1 text-gray-800 pointer-events-none truncate">
+            {item.title}
+          </h3>
+          <div className="shrink-0 size-8">
+            {item.region_id === 1 && (
+              <Image src="/us.png" alt="US" width={32} height={32} />
+            )}
+            {item.region_id === 4 && (
+              <Image src="/jp.png" alt="JP" width={32} height={32} />
+            )}
+          </div>
+        </div>
+        <p className="text-sm text-gray-600 pointer-events-none line-clamp-2">
+          {item.description}
+        </p>
+      </div>
+    </div>
   </div>
 );
 

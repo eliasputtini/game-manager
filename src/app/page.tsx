@@ -1,155 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Image from "next/image";
 import { Game, DraggedItem } from "@/types";
+import {
+  searchGamesByName,
+  convertGamesDBToGame,
+  type GamesDBGame,
+} from "@/services/gamesdb";
 
 import SearchCard from "@/components/SearchCard";
 import DragCard from "@/components/DragCard";
+import ItemsTable from "@/components/ItemsTable";
 
 export default function Home() {
-  // Type the availableJogos array
-  const availableJogos: Game[] = [
-    {
-      id: "game3",
-      title: "🕹️ Metal Gear Solid",
-      description: "Jogo de espionagem tático com narrativa cinematográfica",
-      category: "stealth",
-    },
-    {
-      id: "game11",
-      title: "🌴 GTA Vice City JP",
-      description:
-        "Versão japonesa do icônico jogo de mundo aberto em Vice City",
-      category: "action",
-    },
-    {
-      id: "game12",
-      title: "🏙️ GTA 3 JP",
-      description: "Versão japonesa do clássico que definiu o gênero sandbox",
-      category: "action",
-    },
-    {
-      id: "game13",
-      title: "🏜️ GTA San Andreas JP",
-      description: "Versão japonesa da saga de CJ em San Andreas",
-      category: "action",
-    },
-    {
-      id: "game14",
-      title: "🌴 GTA Vice City",
-      description: "Exploração e ação nos anos 80 em Vice City",
-      category: "action",
-    },
-    {
-      id: "game15",
-      title: "🏙️ GTA 3",
-      description: "O jogo que revolucionou o mundo aberto 3D",
-      category: "action",
-    },
-    {
-      id: "game16",
-      title: "🏜️ GTA San Andreas",
-      description: "Aventuras em Los Santos, San Fierro e Las Venturas",
-      category: "action",
-    },
-    {
-      id: "game17",
-      title: "🎯 Hitman",
-      description: "Infiltração e assassinatos estratégicos como Agente 47",
-      category: "stealth",
-    },
-    {
-      id: "game18",
-      title: "😈 Devil May Cry JP",
-      description: "Versão japonesa do hack and slash estiloso de Dante",
-      category: "action",
-    },
-    {
-      id: "game19",
-      title: "🤖 Ratchet & Clank (4 jogos) JP",
-      description: "Coleção japonesa com quatro aventuras de ação e humor",
-      category: "platform",
-    },
-    {
-      id: "game20",
-      title: "🏺 Tomb Raider PS1",
-      description: "Aventura clássica de exploração com Lara Croft",
-      category: "adventure",
-    },
-    {
-      id: "game21",
-      title: "🏁 CTR Crash Corrida PS1",
-      description: "Corrida divertida com personagens de Crash Bandicoot",
-      category: "racing",
-    },
-    {
-      id: "game22",
-      title: "🥷 Naruto (2 jogos) JP PS2",
-      description: "Dois jogos japoneses de luta e aventura do ninja Naruto",
-      category: "fighting",
-    },
-    {
-      id: "game23",
-      title: "🎖️ Medal of Honor PS2",
-      description: "Ação militar intensa na Segunda Guerra Mundial",
-      category: "shooter",
-    },
-    {
-      id: "game24",
-      title: "🎸 Guitar Hero III: Legends of Rock",
-      description: "Toque solos lendários neste jogo musical",
-      category: "music",
-    },
-    {
-      id: "game25",
-      title: "🎖️ Medal of Honor: Frontline",
-      description: "Campanha épica da Segunda Guerra em missões históricas",
-      category: "shooter",
-    },
-    {
-      id: "game26",
-      title: "🌴 Grand Theft Auto: Vice City",
-      description: "Ação e crime na ensolarada Vice City",
-      category: "action",
-    },
-    {
-      id: "game27",
-      title: "🏜️ Grand Theft Auto: San Andreas",
-      description: "Missões e caos no maior mundo aberto da série",
-      category: "action",
-    },
-    {
-      id: "game28",
-      title: "🏍️ ATV Offroad Fury 2",
-      description: "Corridas radicais de quadriciclo em terrenos off-road",
-      category: "racing",
-    },
-    {
-      id: "game29",
-      title: "🏀 NBA 2K3",
-      description: "Simulação realista de basquete com jogadores da NBA",
-      category: "sports",
-    },
-    {
-      id: "game30",
-      title: "🎩 Mafia",
-      description: "História imersiva de crime organizado nos anos 30",
-      category: "action",
-    },
-    {
-      id: "game31",
-      title: "🛡️ Warriors of Might and Magic",
-      description: "Aventura de fantasia com batalhas e magia",
-      category: "rpg",
-    },
-    {
-      id: "game32",
-      title: "🛹 Tony Hawk's American Wasteland",
-      description: "Skate livre em um mundo aberto repleto de desafios",
-      category: "sports",
-    },
-  ];
+  // Searches now use the external API only; local availableJogos removed
 
   const [sourceItems, setSourceItems] = useState<Game[]>([]);
   const [targetItems, setTargetItems] = useState<Game[]>([]);
@@ -161,31 +26,133 @@ export default function Home() {
   // Add these new state variables at the top with other useState declarations
   const [quantities, setQuantities] = useState<{ [key: string]: number }>({});
   const [prices, setPrices] = useState<{ [key: string]: number }>({});
+  // Debounce state
+  const [debouncedQuery, setDebouncedQuery] = useState<string>("");
 
-  const handleSearch = (query: string) => {
-    setSearchQuery(query);
-    if (query.trim() === "") {
+  // Platform filter toggles: PS1 (10) and PS2 (11)
+  const [includePS1, setIncludePS1] = useState<boolean>(true);
+  const [includePS2, setIncludePS2] = useState<boolean>(false);
+  const US_REGION_ID = 1;
+  const JP_REGION_ID = 4;
+  const [includeUS, setIncludeUS] = useState<boolean>(true);
+  const [includeJP, setIncludeJP] = useState<boolean>(false);
+
+  // Refs to avoid effect re-running on list changes
+  const sourceItemsRef = useRef<Game[]>(sourceItems);
+  const targetItemsRef = useRef<Game[]>(targetItems);
+  const includePS1Ref = useRef<boolean>(includePS1);
+  const includePS2Ref = useRef<boolean>(includePS2);
+  const includeUSRef = useRef<boolean>(includeUS);
+  const includeJPRef = useRef<boolean>(includeJP);
+  useEffect(() => {
+    sourceItemsRef.current = sourceItems;
+  }, [sourceItems]);
+  useEffect(() => {
+    targetItemsRef.current = targetItems;
+  }, [targetItems]);
+  useEffect(() => {
+    includePS1Ref.current = includePS1;
+  }, [includePS1]);
+  useEffect(() => {
+    includePS2Ref.current = includePS2;
+  }, [includePS2]);
+  useEffect(() => {
+    includeUSRef.current = includeUS;
+  }, [includeUS]);
+  useEffect(() => {
+    includeJPRef.current = includeJP;
+  }, [includeJP]);
+
+  // Debounce effect: wait after user stops typing
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setDebouncedQuery(searchQuery.trim());
+    }, 1000);
+    return () => clearTimeout(t);
+  }, [searchQuery]);
+
+  // Perform the API search
+  const performSearch = useCallback(async (query: string) => {
+    if (query === "") {
       setSearchResults([]);
       return;
     }
 
-    const filtered = availableJogos.filter((card) => {
-      const isAlreadyAdded = [...sourceItems, ...targetItems].some(
-        (item) => item.id === card.id
-      );
-      const matchesQuery =
-        card.title.toLowerCase().includes(query.toLowerCase()) ||
-        card.description.toLowerCase().includes(query.toLowerCase()) ||
-        card.category.toLowerCase().includes(query.toLowerCase());
-      return !isAlreadyAdded && matchesQuery;
-    });
+    try {
+      // Decide platforms and regions based on toggles
+      const selectedPlatforms: (number | undefined)[] =
+        includePS1Ref.current && includePS2Ref.current
+          ? [10, 11]
+          : includePS1Ref.current
+          ? [10]
+          : includePS2Ref.current
+          ? [11]
+          : [undefined];
 
-    setSearchResults(filtered);
-  };
+      const selectedRegions: (number | undefined)[] =
+        includeUSRef.current && includeJPRef.current
+          ? [US_REGION_ID, JP_REGION_ID]
+          : includeUSRef.current
+          ? [US_REGION_ID]
+          : includeJPRef.current
+          ? [JP_REGION_ID]
+          : [undefined];
+
+      // Build all combinations; if both arrays are [undefined], we'll get a single undefined/undefined call
+      const tasks: Promise<GamesDBGame[]>[] = [];
+      for (const plat of selectedPlatforms) {
+        for (const reg of selectedRegions) {
+          tasks.push(searchGamesByName(query, plat, reg));
+        }
+      }
+      const results = await Promise.all(tasks);
+      // flatten and dedupe by id
+      const byId: Record<number, GamesDBGame> = {};
+      results.flat().forEach((g) => {
+        byId[g.id] = g;
+      });
+      const apiResults: GamesDBGame[] = Object.values(byId);
+
+      const convertedGames = apiResults.map(convertGamesDBToGame);
+      const filtered = convertedGames.filter((card) => {
+        const isAlreadyAdded = [
+          ...sourceItemsRef.current,
+          ...targetItemsRef.current,
+        ].some((item) => item.id === card.id);
+        return !isAlreadyAdded;
+      });
+      setSearchResults(filtered);
+    } catch (error) {
+      console.error("Error searching games:", error);
+      setSearchResults([]);
+    }
+  }, []);
+
+  // Trigger search when debouncedQuery changes
+  useEffect(() => {
+    performSearch(debouncedQuery);
+  }, [debouncedQuery, performSearch]);
+
+  // Trigger search when platform or region toggles change (using current debounced query)
+  useEffect(() => {
+    performSearch(debouncedQuery);
+  }, [
+    includePS1,
+    includePS2,
+    includeUS,
+    includeJP,
+    debouncedQuery,
+    performSearch,
+  ]);
 
   // Função para adicionar card da busca aos itens disponíveis
   const addCardToSource = (card: Game) => {
     setSourceItems((prev) => [...prev, card]);
+    // Define quantidade padrão como 1 se ainda não existir
+    setQuantities((prev) => ({
+      ...prev,
+      [card.id]: prev[card.id] ?? 1,
+    }));
     // Remove da busca após adicionar
     setSearchResults((prev) => prev.filter((item) => item.id !== card.id));
     // Limpa a busca se não houver mais resultados
@@ -261,7 +228,7 @@ export default function Home() {
   };
 
   const calculateItemTotal = (itemId: string) => {
-    const quantity = quantities[itemId] || 0;
+    const quantity = quantities[itemId] ?? 1;
     const price = prices[itemId] || 0;
     return quantity * price;
   };
@@ -295,16 +262,82 @@ export default function Home() {
       {/* Search Section */}
       <div className="max-w-6xl mx-auto mb-8">
         <div className="bg-white/95 backdrop-blur rounded-2xl p-6 shadow-xl border border-white/20">
-          <h2 className="text-xl font-semibold mb-4 text-center text-gray-800">
-            🔍 Buscar Jogos
-          </h2>
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-xl font-semibold text-gray-800">
+              🔍 Buscar Jogos
+            </h2>
+            <div className="flex flex-col items-end gap-2">
+              {/* Region flags */}
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIncludeUS((v) => !v)}
+                  className={`rounded-md p-0.5 transition ${
+                    includeUS ? "opacity-100" : "opacity-50"
+                  }`}
+                  title="Toggle USA region (region_id 1)"
+                >
+                  <Image
+                    src="/us.png"
+                    alt="United States flag"
+                    width={32}
+                    height={32}
+                    priority={false}
+                  />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIncludeJP((v) => !v)}
+                  className={`rounded-md p-0.5 transition ${
+                    includeJP ? "opacity-100" : "opacity-50"
+                  }`}
+                  title="Toggle Japan region"
+                >
+                  <Image
+                    src="/jp.png"
+                    alt="Japan flag"
+                    width={32}
+                    height={32}
+                    priority={false}
+                  />
+                </button>
+              </div>
+              {/* Platform toggles */}
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIncludePS1((v) => !v)}
+                  className={`px-3 py-1 rounded-lg border text-sm transition ${
+                    includePS1
+                      ? "bg-indigo-600 text-white border-indigo-600"
+                      : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+                  }`}
+                  title="Toggle PS1 (platform 10)"
+                >
+                  PS1
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIncludePS2((v) => !v)}
+                  className={`px-3 py-1 rounded-lg border text-sm transition ${
+                    includePS2
+                      ? "bg-indigo-600 text-white border-indigo-600"
+                      : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+                  }`}
+                  title="Toggle PS2 (platform 11)"
+                >
+                  PS2
+                </button>
+              </div>
+            </div>
+          </div>
 
           <div className="relative mb-4">
             <input
               type="text"
               value={searchQuery}
-              onChange={(e) => handleSearch(e.target.value)}
-              placeholder="Digite para buscar Jogos (ex: estratégia, inovação, design...)"
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Digite para buscar Jogos (ex: Dino Crisis, Resident Evil, etc.)"
               className="w-full p-4 pr-12 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-gray-800 placeholder-gray-500"
             />
             <div className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400">
@@ -434,112 +467,16 @@ export default function Home() {
       </div>
 
       {/* Table Section */}
-      <div className="max-w-6xl mx-auto mt-16">
-        <div className="bg-white/95 backdrop-blur rounded-2xl p-6 shadow-xl border border-white/20">
-          <h2 className="text-xl font-semibold mb-6 text-center text-gray-800">
-            📊 Resumo dos Itens
-          </h2>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm text-left text-gray-600">
-              <thead className="text-xs uppercase bg-gray-100">
-                <tr>
-                  <th className="px-6 py-3 rounded-tl-lg">ID</th>
-                  <th className="px-6 py-3">Título</th>
-                  <th className="px-6 py-3">Categoria</th>
-                  <th className="px-6 py-3">Status</th>
-                  <th className="px-6 py-3">Quantidade</th>
-                  <th className="px-6 py-3">Preço (R$)</th>
-                  <th className="px-6 py-3 rounded-tr-lg">Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                {[...sourceItems, ...targetItems].map((item) => (
-                  <tr
-                    key={item.id}
-                    className="border-b border-gray-200 hover:bg-gray-50"
-                  >
-                    <td className="px-6 py-4 font-medium">{item.id}</td>
-                    <td className="px-6 py-4">{item.title}</td>
-                    <td className="px-6 py-4">
-                      <span className="px-2 py-1 text-xs bg-indigo-100 text-indigo-700 rounded-full">
-                        {item.category}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span
-                        className={`px-2 py-1 text-xs rounded-full ${
-                          sourceItems.find((source) => source.id === item.id)
-                            ? "bg-green-100 text-green-700"
-                            : "bg-blue-100 text-blue-700"
-                        }`}
-                      >
-                        {sourceItems.find((source) => source.id === item.id)
-                          ? "Disponível"
-                          : "Em Destino"}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <input
-                        type="number"
-                        min="0"
-                        value={quantities[item.id] || ""}
-                        onChange={(e) =>
-                          setQuantities({
-                            ...quantities,
-                            [item.id]: Number(e.target.value),
-                          })
-                        }
-                        className="w-20 px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                      />
-                    </td>
-                    <td className="px-6 py-4">
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={prices[item.id] || ""}
-                        onChange={(e) =>
-                          setPrices({
-                            ...prices,
-                            [item.id]: Number(e.target.value),
-                          })
-                        }
-                        className="w-24 px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                      />
-                    </td>
-                    <td className="px-6 py-4 font-medium">
-                      R$ {calculateItemTotal(item.id).toFixed(2)}
-                    </td>
-                  </tr>
-                ))}
-                {sourceItems.length === 0 && targetItems.length === 0 && (
-                  <tr>
-                    <td
-                      colSpan={7}
-                      className="px-6 py-4 text-center text-gray-500 italic"
-                    >
-                      Nenhum item adicionado ainda
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Total Section */}
-          {(sourceItems.length > 0 || targetItems.length > 0) && (
-            <div className="mt-6 flex justify-end">
-              <div className="bg-gray-100 px-6 py-4 rounded-lg">
-                <span className="text-gray-700 font-medium">Total Geral: </span>
-                <span className="text-lg font-bold text-gray-900">
-                  R$ {calculateGrandTotal().toFixed(2)}
-                </span>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
+      <ItemsTable
+        sourceItems={sourceItems}
+        targetItems={targetItems}
+        quantities={quantities}
+        prices={prices}
+        setQuantities={setQuantities}
+        setPrices={setPrices}
+        calculateItemTotal={calculateItemTotal}
+        calculateGrandTotal={calculateGrandTotal}
+      />
 
       {/* Footer */}
       <footer className="max-w-6xl mx-auto mt-16 flex gap-6 flex-wrap items-center justify-center text-sm">
