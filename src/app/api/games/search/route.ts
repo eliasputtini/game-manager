@@ -47,11 +47,9 @@ export async function GET(request: NextRequest) {
   const include = searchParams.get('include') || 'boxart';
   const region = searchParams.get('region');
 
+  // Require name for search route
   if (!name) {
-    return NextResponse.json(
-      { error: 'Name parameter is required' },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: 'Missing name parameter' }, { status: 400 });
   }
 
   try {

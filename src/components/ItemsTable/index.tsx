@@ -16,9 +16,7 @@ type Props = {
     React.SetStateAction<Record<string, number>>
   >;
   packageTax: Record<string, number>;
-  setPackageTax: React.Dispatch<
-    React.SetStateAction<Record<string, number>>
-  >;
+  setPackageTax: React.Dispatch<React.SetStateAction<Record<string, number>>>;
   onDeleteSourcePackage: (pkgId: string) => void;
   onDeleteTargetPackage: (pkgId: string) => void;
   quantities: Quantities;
@@ -155,13 +153,24 @@ export default function ItemsTable({
                 <td className="px-6 py-4">
                   <input
                     type="number"
+                    inputMode="numeric"
                     min="0"
-                    value={quantities[item.id] ?? 1}
+                    step="1"
+                    placeholder="1"
+                    value={
+                      quantities[item.id] === undefined ? "" : quantities[item.id]
+                    }
                     onChange={(e) =>
-                      setQuantities((prev) => ({
-                        ...prev,
-                        [item.id]: Number(e.target.value),
-                      }))
+                      setQuantities((prev) => {
+                        const val = e.target.value;
+                        const next = { ...prev };
+                        if (val === "") {
+                          delete next[item.id];
+                        } else {
+                          next[item.id] = Number(val);
+                        }
+                        return next;
+                      })
                     }
                     className="w-20 px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   />
@@ -171,6 +180,7 @@ export default function ItemsTable({
                     type="number"
                     min="0"
                     step="0.01"
+                    placeholder="0.00"
                     value={prices[item.id] || ""}
                     onChange={(e) =>
                       setPrices((prev) => ({
@@ -208,14 +218,26 @@ export default function ItemsTable({
                 <span className="text-gray-600">R$</span>
                 <input
                   type="number"
+                  inputMode="decimal"
                   min="0"
                   step="0.01"
-                  value={packageFreight[pkgId] ?? 0}
+                  placeholder="0.00"
+                  value={
+                    packageFreight[pkgId] === undefined
+                      ? ""
+                      : packageFreight[pkgId]
+                  }
                   onChange={(e) =>
-                    setPackageFreight((prev) => ({
-                      ...prev,
-                      [pkgId]: Number(e.target.value),
-                    }))
+                    setPackageFreight((prev) => {
+                      const val = e.target.value;
+                      const next = { ...prev };
+                      if (val === "") {
+                        delete next[pkgId];
+                      } else {
+                        next[pkgId] = Number(val);
+                      }
+                      return next;
+                    })
                   }
                   className="w-28 px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-900"
                 />
@@ -227,14 +249,24 @@ export default function ItemsTable({
                 <span className="text-gray-600">R$</span>
                 <input
                   type="number"
+                  inputMode="decimal"
                   min="0"
                   step="0.01"
-                  value={packageTax[pkgId] ?? 0}
+                  placeholder="0.00"
+                  value={
+                    packageTax[pkgId] === undefined ? "" : packageTax[pkgId]
+                  }
                   onChange={(e) =>
-                    setPackageTax((prev) => ({
-                      ...prev,
-                      [pkgId]: Number(e.target.value),
-                    }))
+                    setPackageTax((prev) => {
+                      const val = e.target.value;
+                      const next = { ...prev };
+                      if (val === "") {
+                        delete next[pkgId];
+                      } else {
+                        next[pkgId] = Number(val);
+                      }
+                      return next;
+                    })
                   }
                   className="w-28 px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-900"
                 />
@@ -278,7 +310,7 @@ export default function ItemsTable({
     <div className="max-w-6xl mx-auto mt-16">
       <div className="bg-white/95 backdrop-blur rounded-2xl p-6 shadow-xl border border-white/20">
         <h2 className="text-xl font-semibold mb-6 text-center text-gray-800">
-          📊 Resumo por Pacotes
+          📊 Gastos por Pacotes
         </h2>
 
         {/* Tabelas para Itens Soltos */}
@@ -300,7 +332,7 @@ export default function ItemsTable({
         {allItems.length > 0 && (
           <div className="mt-6 flex justify-end">
             <div className="bg-gray-100 px-6 py-4 rounded-lg">
-              <span className="text-gray-700 font-medium">Total Geral: </span>
+              <span className="text-gray-700 font-medium">Gasto Geral: </span>
               <span className="text-lg font-bold text-gray-900">
                 R$ {calculateGrandTotal().toFixed(2)}
               </span>

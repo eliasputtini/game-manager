@@ -64,7 +64,9 @@ export default function Home() {
     }[]
   >([]);
   // Frete por pacote (origem e destino compartilham o mesmo id)
-  const [packageFreight, setPackageFreight] = useState<Record<string, number>>({});
+  const [packageFreight, setPackageFreight] = useState<Record<string, number>>(
+    {}
+  );
   // Imposto por pacote
   const [packageTax, setPackageTax] = useState<Record<string, number>>({});
   const [packageCounter, setPackageCounter] = useState<number>(1);
@@ -82,6 +84,12 @@ export default function Home() {
   // Track the main container and last pointer position
   const containerRef = useRef<HTMLDivElement | null>(null);
   const lastPointerRef = useRef<{ x: number; y: number } | null>(null);
+  // Prevent initial autosave right after hydration
+  const hydratedRef = useRef<boolean>(false);
+  // Guard: ensure load effect runs only once (React Strict Mode double-invokes in dev)
+  const loadedOnceRef = useRef<boolean>(false);
+  // Skip the first autosave after hydration
+  const skipNextSaveRef = useRef<boolean>(false);
   useEffect(() => {
     sourceItemsRef.current = sourceItems;
   }, [sourceItems]);
@@ -100,6 +108,163 @@ export default function Home() {
   useEffect(() => {
     includeJPRef.current = includeJP;
   }, [includeJP]);
+
+  // Load persisted state first; if absent, fallback to initial DB items
+  useEffect(() => {
+    if (loadedOnceRef.current) return; // prevent double run in dev Strict Mode
+    loadedOnceRef.current = true;
+    let cancelled = false;
+    type PersistedPkg = { id: string; name: string; itemIds: string[] };
+    async function load() {
+      try {
+        // Try load persisted state
+        const sres = await fetch("/api/state", { cache: "no-store" });
+        if (!sres.ok) throw new Error(`State HTTP ${sres.status}`);
+        const state = await sres.json();
+        if (!cancelled && state) {
+          // Hydrate from persisted state
+          const itemsMap: Record<string, Game> = state.itemsMap || {};
+          const idToItem = (id: string): Game | null => itemsMap[id] ?? null;
+          const mapIds = (ids: string[]): Game[] =>
+            ids.map(idToItem).filter(Boolean) as Game[];
+          const usedIds = new Set<string>([
+            ...((state.sourceItemIds as string[]) || []),
+            ...((state.targetItemIds as string[]) || []),
+            ...((state.sourcePackages as PersistedPkg[]) || []).flatMap(
+              (p) => p.itemIds || []
+            ),
+            ...((state.targetPackages as PersistedPkg[]) || []).flatMap(
+              (p) => p.itemIds || []
+            ),
+          ]);
+          const prune = <T,>(
+            rec: Record<string, T> | undefined
+          ): Record<string, T> => {
+            const src = rec || ({} as Record<string, T>);
+            const out: Record<string, T> = {};
+            for (const [k, v] of Object.entries(src))
+              if (usedIds.has(k)) out[k] = v as T;
+            return out;
+          };
+
+          setSourceItems(mapIds(state.sourceItemIds || []));
+          setTargetItems(mapIds(state.targetItemIds || []));
+          setPackages(
+            ((state.sourcePackages as PersistedPkg[]) || []).map((p) => ({
+              id: String(p.id),
+              name: String(p.name ?? ""),
+              items: mapIds(p.itemIds || []),
+            }))
+          );
+          setTargetPackages(
+            ((state.targetPackages as PersistedPkg[]) || []).map((p) => ({
+              id: String(p.id),
+              name: String(p.name ?? ""),
+              items: mapIds(p.itemIds || []),
+            }))
+          );
+          setQuantities(prune<number>(state.quantities));
+          setPrices(prune<number>(state.prices));
+          setPackageFreight(state.packageFreight || {});
+          setPackageTax(state.packageTax || {});
+          if (typeof state.packageCounter === "number")
+            setPackageCounter(state.packageCounter);
+          hydratedRef.current = true; // hydrated
+          skipNextSaveRef.current = true; // skip the first save
+          return; // done
+        }
+      } catch (e) {
+        console.warn("Failed to load state; starting empty.", e);
+        if (!cancelled) {
+          // Start with empty state when /api/state fails
+          setSourceItems([]);
+          setTargetItems([]);
+          setPackages([]);
+          setTargetPackages([]);
+          setQuantities({});
+          setPrices({});
+          setPackageFreight({});
+          setPackageTax({});
+          setPackageCounter(1);
+          hydratedRef.current = true; // initial load complete
+          skipNextSaveRef.current = true; // skip the first save
+        }
+      }
+    }
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Persist state to /api/state whenever it changes (debounced)
+  useEffect(() => {
+    if (!hydratedRef.current) return; // skip initial render save
+    if (skipNextSaveRef.current) {
+      // consume the flag and skip this run
+      skipNextSaveRef.current = false;
+      return;
+    }
+    const t = setTimeout(async () => {
+      try {
+        // Collect unique items to build itemsMap
+        const all = [
+          ...sourceItems,
+          ...targetItems,
+          ...packages.flatMap((p) => p.items),
+          ...targetPackages.flatMap((p) => p.items),
+        ];
+        const byId: Record<string, Game> = {};
+        for (const it of all) byId[it.id] = it;
+        const validIds = new Set(Object.keys(byId));
+        const prune = <T,>(rec: Record<string, T>): Record<string, T> => {
+          const out: Record<string, T> = {};
+          for (const [k, v] of Object.entries(rec || {}))
+            if (validIds.has(k)) out[k] = v as T;
+          return out;
+        };
+
+        const payload = {
+          sourceItemIds: sourceItems.map((i) => String(i.id)),
+          targetItemIds: targetItems.map((i) => String(i.id)),
+          sourcePackages: packages.map((p) => ({
+            id: p.id,
+            name: p.name,
+            itemIds: p.items.map((i) => String(i.id)),
+          })),
+          targetPackages: targetPackages.map((p) => ({
+            id: p.id,
+            name: p.name,
+            itemIds: p.items.map((i) => String(i.id)),
+          })),
+          quantities: prune<number>(quantities),
+          prices: prune<number>(prices),
+          packageFreight,
+          packageTax,
+          packageCounter,
+          itemsMap: byId,
+        };
+        await fetch("/api/state", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+      } catch (e) {
+        console.error("Failed to persist state", e);
+      }
+    }, 800);
+    return () => clearTimeout(t);
+  }, [
+    sourceItems,
+    targetItems,
+    packages,
+    targetPackages,
+    quantities,
+    prices,
+    packageFreight,
+    packageTax,
+    packageCounter,
+  ]);
 
   // Debounce effect: wait after user stops typing
   useEffect(() => {
@@ -217,7 +382,9 @@ export default function Home() {
       setSourceItems((sPrev) => {
         const merged = [...sPrev, ...pkg.items];
         const byId: Record<string | number, boolean> = {};
-        return merged.filter((it) => (byId[it.id] ? false : (byId[it.id] = true)));
+        return merged.filter((it) =>
+          byId[it.id] ? false : (byId[it.id] = true)
+        );
       });
       // Clear freight/tax for this package
       setPackageFreight((pf) => {
@@ -244,15 +411,19 @@ export default function Home() {
       setSourceItems((sPrev) => {
         const merged = [...sPrev, ...pkg.items];
         const byId: Record<string | number, boolean> = {};
-        return merged.filter((it) => (byId[it.id] ? false : (byId[it.id] = true)));
+        return merged.filter((it) =>
+          byId[it.id] ? false : (byId[it.id] = true)
+        );
       });
       // Clear freight/tax for this package
       setPackageFreight((pf) => {
-        const { [pkgId]: _f, ...rest } = pf;
+        const rest = { ...pf };
+        delete rest[pkgId];
         return rest;
       });
       setPackageTax((pt) => {
-        const { [pkgId]: _t, ...rest } = pt;
+        const rest = { ...pt };
+        delete rest[pkgId];
         return rest;
       });
       // Remove package
@@ -473,12 +644,18 @@ export default function Home() {
       if (!pkg) return prev;
 
       // 1) Limpa itens desse pacote de listas soltas e pacotes destino
-      setTargetItems((tprev) => tprev.filter((i) => !pkg.items.some((pi) => pi.id === i.id)));
-      setSourceItems((sprev) => sprev.filter((i) => !pkg.items.some((pi) => pi.id === i.id)));
-      setTargetPackages((tp) => tp.map((p) => ({
-        ...p,
-        items: p.items.filter((i) => !pkg.items.some((pi) => pi.id === i.id)),
-      })));
+      setTargetItems((tprev) =>
+        tprev.filter((i) => !pkg.items.some((pi) => pi.id === i.id))
+      );
+      setSourceItems((sprev) =>
+        sprev.filter((i) => !pkg.items.some((pi) => pi.id === i.id))
+      );
+      setTargetPackages((tp) =>
+        tp.map((p) => ({
+          ...p,
+          items: p.items.filter((i) => !pkg.items.some((pi) => pi.id === i.id)),
+        }))
+      );
 
       // 2) Move o pacote inteiro para a Área de Destino (mantendo agrupado)
       setTargetPackages((tpPrev) => {
@@ -491,7 +668,9 @@ export default function Home() {
                   ...p,
                   items: [
                     ...p.items,
-                    ...pkg.items.filter((i) => !p.items.some((ei) => ei.id === i.id)),
+                    ...pkg.items.filter(
+                      (i) => !p.items.some((ei) => ei.id === i.id)
+                    ),
                   ],
                 }
               : p
@@ -521,6 +700,17 @@ export default function Home() {
         items: p.items.filter((i) => i.id !== game.id),
       }))
     );
+    // Prune quantities and prices for the removed item
+    setQuantities((prev) => {
+      const rest = { ...prev };
+      delete rest[game.id];
+      return rest;
+    });
+    setPrices((prev) => {
+      const rest = { ...prev };
+      delete rest[game.id];
+      return rest;
+    });
   };
 
   const calculateItemTotal = (itemId: string) => {
@@ -768,7 +958,9 @@ export default function Home() {
                 <div key={pkg.id} className="">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2 group">
-                      <div className="font-medium text-gray-700">{pkg.name}</div>
+                      <div className="font-medium text-gray-700">
+                        {pkg.name}
+                      </div>
                       <button
                         type="button"
                         onClick={() => onDeleteSourcePackage(pkg.id)}
@@ -894,7 +1086,9 @@ export default function Home() {
                 <div key={pkg.id} className="">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2 group">
-                      <div className="font-medium text-gray-700">{pkg.name}</div>
+                      <div className="font-medium text-gray-700">
+                        {pkg.name}
+                      </div>
                       <button
                         type="button"
                         onClick={() => onDeleteTargetPackage(pkg.id)}

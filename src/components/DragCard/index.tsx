@@ -19,7 +19,6 @@ const DragCard: React.FC<DragCardProps> = ({
   handleDragEnd,
   clearDragState,
   draggedItem,
-  onDelete,
 }) => (
   <div
     draggable
