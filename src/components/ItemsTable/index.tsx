@@ -63,7 +63,7 @@ export default function ItemsTable({
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-2">
-                      {item.region_id === 1 && (
+                      {(item.region_id === 1 || item.region_id === 8) && (
                         <>
                           <Image
                             src="/us.png"

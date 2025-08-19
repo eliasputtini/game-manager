@@ -14,6 +14,9 @@ import DragCard from "@/components/DragCard";
 import ItemsTable from "@/components/ItemsTable";
 import Footer from "@/components/Footer";
 
+// Region constants
+const US_REGION_IDS = [1, 8] as const;
+
 export default function Home() {
   // Searches now use the external API only; local availableJogos removed
 
@@ -35,7 +38,6 @@ export default function Home() {
   // Platform filter toggles: PS1 (10) and PS2 (11)
   const [includePS1, setIncludePS1] = useState<boolean>(true);
   const [includePS2, setIncludePS2] = useState<boolean>(false);
-  const US_REGION_ID = 1;
   const JP_REGION_ID = 4;
   const [includeUS, setIncludeUS] = useState<boolean>(true);
   const [includeJP, setIncludeJP] = useState<boolean>(false);
@@ -47,6 +49,7 @@ export default function Home() {
   const includePS2Ref = useRef<boolean>(includePS2);
   const includeUSRef = useRef<boolean>(includeUS);
   const includeJPRef = useRef<boolean>(includeJP);
+  const lastRequestKeyRef = useRef<string | null>(null);
   useEffect(() => {
     sourceItemsRef.current = sourceItems;
   }, [sourceItems]);
@@ -84,36 +87,42 @@ export default function Home() {
 
     try {
       setIsLoading(true);
-      // Decide platforms and regions based on toggles
-      const selectedPlatforms: (number | undefined)[] =
+      // Decide platforms as a single comma-separated param
+      const platformParam: string | undefined =
         includePS1Ref.current && includePS2Ref.current
-          ? [10, 11]
+          ? '10,11'
           : includePS1Ref.current
-          ? [10]
+          ? '10'
           : includePS2Ref.current
-          ? [11]
-          : [undefined];
+          ? '11'
+          : undefined;
 
-      const selectedRegions: (number | undefined)[] =
+      // Build a single comma-separated region parameter so we make only ONE call per platform
+      const regionParam: string | undefined =
         includeUSRef.current && includeJPRef.current
-          ? [US_REGION_ID, JP_REGION_ID]
+          ? `${US_REGION_IDS.join(',')},${JP_REGION_ID}`
           : includeUSRef.current
-          ? [US_REGION_ID]
+          ? US_REGION_IDS.join(',')
           : includeJPRef.current
-          ? [JP_REGION_ID]
-          : [undefined];
+          ? String(JP_REGION_ID)
+          : undefined;
 
-      // Build all combinations; if both arrays are [undefined], we'll get a single undefined/undefined call
-      const tasks: Promise<GamesDBGame[]>[] = [];
-      for (const plat of selectedPlatforms) {
-        for (const reg of selectedRegions) {
-          tasks.push(searchGamesByName(query, plat, reg));
-        }
+      // Skip duplicate identical requests (e.g., Strict Mode double-invoke in dev)
+      const requestKey = JSON.stringify({ q: query, p: platformParam, r: regionParam });
+      if (lastRequestKeyRef.current === requestKey) {
+        setIsLoading(false);
+        return;
       }
-      const results = await Promise.all(tasks);
+      lastRequestKeyRef.current = requestKey;
+
+      // Single request total using combined params
+      const resultsArr = await Promise.all([
+        searchGamesByName(query, platformParam, regionParam),
+      ]);
       // flatten and dedupe by id
       const byId: Record<number, GamesDBGame> = {};
-      results.flat().forEach((g) => {
+      const results: GamesDBGame[] = resultsArr[0] || [];
+      results.forEach((g: GamesDBGame) => {
         byId[g.id] = g;
       });
       const apiResults: GamesDBGame[] = Object.values(byId);
@@ -134,11 +143,6 @@ export default function Home() {
       setIsLoading(false);
     }
   }, []);
-
-  // Trigger search when debouncedQuery changes
-  useEffect(() => {
-    performSearch(debouncedQuery);
-  }, [debouncedQuery, performSearch]);
 
   // Trigger search when platform or region toggles change (using current debounced query)
   useEffect(() => {
@@ -282,7 +286,7 @@ export default function Home() {
                   className={`rounded-md p-0.5 transition ${
                     includeUS ? "opacity-100" : "opacity-50"
                   }`}
-                  title="Toggle USA region (region_id 1)"
+                  title="Toggle USA region (regions 1 & 8)"
                 >
                   <Image
                     src="/us.png"

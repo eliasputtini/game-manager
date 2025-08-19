@@ -1,5 +1,3 @@
-import Image from "next/image";
-
 export default function Footer() {
   return (
     <footer className="max-w-6xl mx-auto mt-16 flex gap-2 flex-wrap items-center text-gray-700 justify-center text-sm">

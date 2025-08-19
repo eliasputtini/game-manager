@@ -59,7 +59,7 @@ const DragCard: React.FC<DragCardProps> = ({
             {item.title}
           </h3>
           <div className="shrink-0 size-8">
-            {item.region_id === 1 && (
+            {(item.region_id === 1 || item.region_id === 8) && (
               <Image src="/us.png" alt="US" width={32} height={32} />
             )}
             {item.region_id === 4 && (

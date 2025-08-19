@@ -29,20 +29,26 @@ export interface GamesDBResponse {
 
 export async function searchGamesByName(
   name: string,
-  platform?: number,
-  region?: number
+  platform?: number | string | number[],
+  region?: number | string | number[]
 ): Promise<GamesDBGame[]> {
   try {
     const params = new URLSearchParams({
       name: name,
     });
 
-    if (platform) {
-      params.append('platform', platform.toString());
+    if (platform !== undefined) {
+      const platformParam = Array.isArray(platform)
+        ? platform.join(',')
+        : platform.toString();
+      params.append('platform', platformParam);
     }
 
-    if (region) {
-      params.append('region', region.toString());
+    if (region !== undefined) {
+      const regionParam = Array.isArray(region)
+        ? region.join(',')
+        : region.toString();
+      params.append('region', regionParam);
     }
 
     // Request boxart by default
