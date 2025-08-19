@@ -9,6 +9,7 @@ interface DragCardProps {
   handleDragEnd: () => void;
   clearDragState: () => void;
   draggedItem: DraggedItem | null;
+  onDelete?: (item: Game) => void;
 }
 
 const DragCard: React.FC<DragCardProps> = ({
@@ -18,6 +19,7 @@ const DragCard: React.FC<DragCardProps> = ({
   handleDragEnd,
   clearDragState,
   draggedItem,
+  onDelete,
 }) => (
   <div
     draggable
@@ -28,14 +30,14 @@ const DragCard: React.FC<DragCardProps> = ({
         clearDragState();
       }
     }}
-    className={`p-5 bg-gradient-to-br from-gray-50 to-gray-200 rounded-xl cursor-grab select-none shadow-lg transition-all duration-300 border-l-4 font-medium hover:shadow-xl hover:-translate-y-1 active:cursor-grabbing ${
+    className={`relative p-2 bg-gradient-to-br from-gray-50 to-gray-200 rounded-xl cursor-grab select-none shadow-lg transition-all duration-300 border-l-4 font-medium hover:shadow-xl hover:-translate-y-1 active:cursor-grabbing ${
       isDragging ? "opacity-70 rotate-2 scale-105 z-50" : ""
     } ${
-      item.id.includes("card1") || item.id.includes("item1")
-        ? "border-l-red-400 from-red-50 to-red-100"
-        : item.id.includes("card2") || item.id.includes("item2")
-        ? "border-l-teal-400 from-teal-50 to-teal-100"
-        : "border-l-blue-400 from-blue-50 to-blue-100"
+      item.region_id === 4
+        ? "border-l-red-400 from-blue-50 to-blue-300" // JP
+        : item.region_id === 1 || item.region_id === 8
+        ? "border-l-blue-400 from-blue-50 to-blue-100" // US
+        : "border-l-teal-400 from-teal-50 to-teal-100" // Others
     }`}
     style={{
       zIndex: isDragging ? 1000 : 1,
@@ -54,22 +56,23 @@ const DragCard: React.FC<DragCardProps> = ({
         </div>
       ) : null}
       <div className="min-w-0 flex-1">
-        <div className="flex items-center justify-between gap-2">
-          <h3 className="text-lg font-semibold mb-1 text-gray-800 pointer-events-none truncate">
-            {item.title}
-          </h3>
-          <div className="shrink-0 size-8">
-            {(item.region_id === 1 || item.region_id === 8) && (
-              <Image src="/us.png" alt="US" width={32} height={32} />
-            )}
-            {item.region_id === 4 && (
-              <Image src="/jp.png" alt="JP" width={32} height={32} />
-            )}
-          </div>
-        </div>
+        <h3 className="text-lg font-semibold mb-1 text-gray-800 pointer-events-none truncate">
+          {item.title}
+        </h3>
+
         <p className="text-sm text-gray-600 pointer-events-none line-clamp-2">
           {item.description}
         </p>
+      </div>
+      <div className="flex flex-col items-end">
+        <div className="shrink-0 size-8">
+          {(item.region_id === 1 || item.region_id === 8) && (
+            <Image src="/us.png" alt="US" width={32} height={32} />
+          )}
+          {item.region_id === 4 && (
+            <Image src="/jp.png" alt="JP" width={32} height={32} />
+          )}
+        </div>
       </div>
     </div>
   </div>

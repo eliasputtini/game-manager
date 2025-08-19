@@ -17,6 +17,8 @@ import Footer from "@/components/Footer";
 // Region constants
 const US_REGION_IDS = [1, 8] as const;
 
+const JP_REGION_ID = 4;
+
 export default function Home() {
   // Searches now use the external API only; local availableJogos removed
 
@@ -38,9 +40,17 @@ export default function Home() {
   // Platform filter toggles: PS1 (10) and PS2 (11)
   const [includePS1, setIncludePS1] = useState<boolean>(true);
   const [includePS2, setIncludePS2] = useState<boolean>(false);
-  const JP_REGION_ID = 4;
   const [includeUS, setIncludeUS] = useState<boolean>(true);
   const [includeJP, setIncludeJP] = useState<boolean>(false);
+  // Packages in source area
+  const [packages, setPackages] = useState<
+    {
+      id: string;
+      name: string;
+      items: Game[];
+    }[]
+  >([]);
+  const [packageCounter, setPackageCounter] = useState<number>(1);
 
   // Refs to avoid effect re-running on list changes
   const sourceItemsRef = useRef<Game[]>(sourceItems);
@@ -50,6 +60,11 @@ export default function Home() {
   const includeUSRef = useRef<boolean>(includeUS);
   const includeJPRef = useRef<boolean>(includeJP);
   const lastRequestKeyRef = useRef<string | null>(null);
+  // Track if the current drag had a valid drop
+  const wasDroppedRef = useRef<boolean>(false);
+  // Track the main container and last pointer position
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const lastPointerRef = useRef<{ x: number; y: number } | null>(null);
   useEffect(() => {
     sourceItemsRef.current = sourceItems;
   }, [sourceItems]);
@@ -90,25 +105,29 @@ export default function Home() {
       // Decide platforms as a single comma-separated param
       const platformParam: string | undefined =
         includePS1Ref.current && includePS2Ref.current
-          ? '10,11'
+          ? "10,11"
           : includePS1Ref.current
-          ? '10'
+          ? "10"
           : includePS2Ref.current
-          ? '11'
+          ? "11"
           : undefined;
 
       // Build a single comma-separated region parameter so we make only ONE call per platform
       const regionParam: string | undefined =
         includeUSRef.current && includeJPRef.current
-          ? `${US_REGION_IDS.join(',')},${JP_REGION_ID}`
+          ? `${US_REGION_IDS.join(",")},${JP_REGION_ID}`
           : includeUSRef.current
-          ? US_REGION_IDS.join(',')
+          ? US_REGION_IDS.join(",")
           : includeJPRef.current
           ? String(JP_REGION_ID)
           : undefined;
 
       // Skip duplicate identical requests (e.g., Strict Mode double-invoke in dev)
-      const requestKey = JSON.stringify({ q: query, p: platformParam, r: regionParam });
+      const requestKey = JSON.stringify({
+        q: query,
+        p: platformParam,
+        r: regionParam,
+      });
       if (lastRequestKeyRef.current === requestKey) {
         setIsLoading(false);
         return;
@@ -183,13 +202,50 @@ export default function Home() {
     setTimeout(() => {
       setDraggedItem(item);
     }, 0);
+    wasDroppedRef.current = false;
     e.dataTransfer.effectAllowed = "move";
     e.dataTransfer.setData("text/plain", item.id);
+
+    // Track pointer while dragging
+    const onWindowDragOver = (ev: DragEvent) => {
+      lastPointerRef.current = { x: ev.clientX, y: ev.clientY };
+    };
+    (window as any).__onWindowDragOver = onWindowDragOver;
+    window.addEventListener("dragover", onWindowDragOver);
   };
 
   const handleDragEnd = () => {
-    // Força a limpeza do estado após um pequeno delay
-    setTimeout(clearDragState, 100);
+    // Após o término do drag, se não houve drop válido, deletar o item
+    const current = draggedItem;
+    setTimeout(() => {
+      // Cleanup listener
+      const onWindowDragOver = (window as any).__onWindowDragOver as
+        | ((ev: DragEvent) => void)
+        | undefined;
+      if (onWindowDragOver) {
+        window.removeEventListener("dragover", onWindowDragOver);
+        (window as any).__onWindowDragOver = undefined;
+      }
+
+      if (!wasDroppedRef.current && current) {
+        // Decide based on whether last pointer was outside the main container
+        const last = lastPointerRef.current;
+        const container = containerRef.current;
+        if (last && container) {
+          const rect = container.getBoundingClientRect();
+          const outside =
+            last.x < rect.left ||
+            last.x > rect.right ||
+            last.y < rect.top ||
+            last.y > rect.bottom;
+          if (outside) {
+            handleDeleteItem(current as Game);
+          }
+        }
+      }
+      wasDroppedRef.current = false;
+      clearDragState();
+    }, 100);
   };
 
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>, area: string) => {
@@ -215,27 +271,91 @@ export default function Home() {
   ) => {
     e.preventDefault();
     clearDragState();
+    wasDroppedRef.current = true;
 
     const draggedId = e.dataTransfer.getData("text/plain");
-    const item = [...sourceItems, ...targetItems].find(
-      (item) => item.id === draggedId
-    );
+    const item = [
+      ...sourceItems,
+      ...targetItems,
+      ...packages.flatMap((p) => p.items),
+    ].find((it) => it.id === draggedId);
 
     if (!item) return;
 
     if (targetArea === "source") {
-      // Move para área de origem
-      if (targetItems.find((i) => i.id === item.id)) {
-        setTargetItems((prev) => prev.filter((i) => i.id !== item.id));
-        setSourceItems((prev) => [...prev, item]);
-      }
+      // Move para área de origem (sempre adiciona ao source)
+      setTargetItems((prev) => prev.filter((i) => i.id !== item.id));
+      // Remove de todos os pacotes
+      setPackages((prev) =>
+        prev.map((p) => ({
+          ...p,
+          items: p.items.filter((i) => i.id !== item.id),
+        }))
+      );
+      // Garante no source sem duplicar
+      setSourceItems((prev) =>
+        prev.some((i) => i.id === item.id) ? prev : [...prev, item]
+      );
     } else if (targetArea === "target") {
-      // Move para área de destino
-      if (sourceItems.find((i) => i.id === item.id)) {
-        setSourceItems((prev) => prev.filter((i) => i.id !== item.id));
-        setTargetItems((prev) => [...prev, item]);
-      }
+      // Move para área de destino (sempre adiciona ao target)
+      setSourceItems((prev) => prev.filter((i) => i.id !== item.id));
+      // Remove de todos os pacotes
+      setPackages((prev) =>
+        prev.map((p) => ({
+          ...p,
+          items: p.items.filter((i) => i.id !== item.id),
+        }))
+      );
+      // Garante no target sem duplicar
+      setTargetItems((prev) =>
+        prev.some((i) => i.id === item.id) ? prev : [...prev, item]
+      );
+    } else if (targetArea.startsWith("package:")) {
+      // Move para um pacote específico (atômico)
+      const pkgId = targetArea.split(":")[1];
+      // 1) Remove do destino e origem
+      setTargetItems((prev) => prev.filter((i) => i.id !== item.id));
+      setSourceItems((prev) => prev.filter((i) => i.id !== item.id));
+      // 2) Atualiza pacotes: remove de todos e adiciona ao escolhido
+      setPackages((prev) => {
+        const cleaned = prev.map((p) => ({
+          ...p,
+          items: p.items.filter((i) => i.id !== item.id),
+        }));
+        return cleaned.map((p) =>
+          p.id === pkgId
+            ? {
+                ...p,
+                items: p.items.some((i) => i.id === item.id)
+                  ? p.items
+                  : [...p.items, item],
+              }
+            : p
+        );
+      });
     }
+  };
+
+  // Create a new empty package in source area
+  const addPackage = () => {
+    const newId = `pkg-${packageCounter + 1}`;
+    setPackages((prev) => [
+      ...prev,
+      { id: newId, name: `Pacote ${packageCounter + 1}`, items: [] },
+    ]);
+    setPackageCounter((c) => c + 1);
+  };
+
+  // Remove item from any list (source, target, packages)
+  const handleDeleteItem = (game: Game) => {
+    setSourceItems((prev) => prev.filter((i) => i.id !== game.id));
+    setTargetItems((prev) => prev.filter((i) => i.id !== game.id));
+    setPackages((prev) =>
+      prev.map((p) => ({
+        ...p,
+        items: p.items.filter((i) => i.id !== game.id),
+      }))
+    );
   };
 
   const calculateItemTotal = (itemId: string) => {
@@ -400,15 +520,29 @@ export default function Home() {
       </div>
 
       {/* Drag and Drop Areas */}
-      <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <div
+        ref={containerRef}
+        className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-8"
+      >
         {/* Source Area */}
         <div className="bg-white/95 backdrop-blur rounded-2xl p-6 shadow-xl border border-white/20">
-          <h2 className="text-xl font-semibold mb-6 text-center text-gray-800 border-l-4 border-green-500 pl-4">
-            📦 Itens Disponíveis
-            <span className="bg-gray-600 text-white rounded-full w-6 h-6 inline-flex items-center justify-center text-xs ml-2">
-              {sourceItems.length}
-            </span>
-          </h2>
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-xl font-semibold text-gray-800 border-l-4 border-green-500 pl-4">
+              📦 Itens Disponíveis
+              <span className="bg-gray-600 text-white rounded-full w-6 h-6 inline-flex items-center justify-center text-xs ml-2">
+                {sourceItems.length}
+              </span>
+            </h2>
+            <button
+              type="button"
+              onClick={addPackage}
+              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-dashed border-green-400 text-green-700 hover:bg-green-50 text-sm"
+              title="Criar novo pacote"
+            >
+              <span className="text-lg leading-none">＋</span>
+              Novo Pacote
+            </button>
+          </div>
 
           <div
             className={`min-h-64 border-2 border-dashed rounded-xl p-4 transition-all duration-300 ${
@@ -430,6 +564,7 @@ export default function Home() {
                   handleDragEnd={handleDragEnd}
                   clearDragState={clearDragState}
                   draggedItem={draggedItem}
+                  onDelete={handleDeleteItem}
                 />
               ))}
               {sourceItems.length === 0 && (
@@ -443,6 +578,49 @@ export default function Home() {
               )}
             </div>
           </div>
+
+          {/* Packages list */}
+          {packages.length > 0 && (
+            <div className="mt-6 space-y-4">
+              {packages.map((pkg) => (
+                <div key={pkg.id} className="">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="font-medium text-gray-700">{pkg.name}</div>
+                  </div>
+                  <div
+                    className={`min-h-40 border-2 border-dashed rounded-xl p-4 transition-all duration-300 ${
+                      dragOver === `package:${pkg.id}`
+                        ? "border-green-400 bg-green-50 scale-102"
+                        : "border-gray-300"
+                    }`}
+                    onDragOver={(e) => handleDragOver(e, `package:${pkg.id}`)}
+                    onDragLeave={(e) => handleDragLeave(e)}
+                    onDrop={(e) => handleDrop(e, `package:${pkg.id}`)}
+                  >
+                    <div className="space-y-4">
+                      {pkg.items.map((item) => (
+                        <DragCard
+                          key={item.id}
+                          item={item}
+                          isDragging={draggedItem?.id === item.id}
+                          handleDragStart={handleDragStart}
+                          handleDragEnd={handleDragEnd}
+                          clearDragState={clearDragState}
+                          draggedItem={draggedItem}
+                          onDelete={handleDeleteItem}
+                        />
+                      ))}
+                      {pkg.items.length === 0 && (
+                        <div className="text-center text-gray-400 italic py-6 text-sm">
+                          Arraste itens para este pacote
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Target Area */}
@@ -474,6 +652,7 @@ export default function Home() {
                   handleDragEnd={handleDragEnd}
                   clearDragState={clearDragState}
                   draggedItem={draggedItem}
+                  onDelete={handleDeleteItem}
                 />
               ))}
               {targetItems.length === 0 && (
@@ -488,7 +667,7 @@ export default function Home() {
 
       {/* Table Section */}
       <ItemsTable
-        sourceItems={sourceItems}
+        sourceItems={[...sourceItems, ...packages.flatMap((p) => p.items)]}
         targetItems={targetItems}
         quantities={quantities}
         prices={prices}
