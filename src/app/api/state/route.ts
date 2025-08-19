@@ -22,6 +22,7 @@ export type PersistedState = {
   targetPackages: PersistedPackage[];
   quantities: Record<string, number>;
   prices: Record<string, number>;
+  sellingPrices: Record<string, number>;
   packageFreight: Record<string, number>;
   packageTax: Record<string, number>;
   packageCounter?: number;
@@ -91,6 +92,7 @@ export async function GET() {
         targetPackages: [],
         quantities: {},
         prices: {},
+        sellingPrices: {},
         packageFreight: {},
         packageTax: {},
         packageCounter: 1,
@@ -132,6 +134,10 @@ export async function PUT(req: Request) {
         : [],
       quantities: payload.quantities && typeof payload.quantities === 'object' ? payload.quantities : {},
       prices: payload.prices && typeof payload.prices === 'object' ? payload.prices : {},
+      sellingPrices:
+        payload.sellingPrices && typeof payload.sellingPrices === 'object'
+          ? payload.sellingPrices
+          : {},
       packageFreight:
         payload.packageFreight && typeof payload.packageFreight === 'object'
           ? payload.packageFreight

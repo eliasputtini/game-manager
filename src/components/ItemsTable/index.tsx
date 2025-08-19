@@ -21,8 +21,10 @@ type Props = {
   onDeleteTargetPackage: (pkgId: string) => void;
   quantities: Quantities;
   prices: Quantities;
+  sellingPrices: Quantities;
   setQuantities: React.Dispatch<React.SetStateAction<Quantities>>;
   setPrices: React.Dispatch<React.SetStateAction<Quantities>>;
+  setSellingPrices: React.Dispatch<React.SetStateAction<Quantities>>;
   calculateItemTotal: (itemId: string) => number;
   calculateGrandTotal: () => number;
 };
@@ -40,8 +42,10 @@ export default function ItemsTable({
   onDeleteTargetPackage,
   quantities,
   prices,
+  sellingPrices,
   setQuantities,
   setPrices,
+  setSellingPrices,
   calculateItemTotal,
   calculateGrandTotal,
 }: Props) {
@@ -115,6 +119,7 @@ export default function ItemsTable({
               <th className="px-6 py-3">Região</th>
               <th className="px-6 py-3">Quantidade</th>
               <th className="px-6 py-3">Preço (R$)</th>
+              <th className="px-6 py-3">Preço Venda (R$)</th>
               <th className="px-6 py-3 rounded-tr-lg">Total</th>
             </tr>
           </thead>
@@ -158,7 +163,9 @@ export default function ItemsTable({
                     step="1"
                     placeholder="1"
                     value={
-                      quantities[item.id] === undefined ? "" : quantities[item.id]
+                      quantities[item.id] === undefined
+                        ? ""
+                        : quantities[item.id]
                     }
                     onChange={(e) =>
                       setQuantities((prev) => {
@@ -191,6 +198,22 @@ export default function ItemsTable({
                     className="w-24 px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   />
                 </td>
+                <td className="px-6 py-4">
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={sellingPrices[item.id] || ""}
+                    onChange={(e) =>
+                      setSellingPrices((prev) => ({
+                        ...prev,
+                        [item.id]: Number(e.target.value),
+                      }))
+                    }
+                    className="w-24 px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </td>
                 <td className="px-6 py-4 font-medium">
                   R$ {calculateItemTotal(item.id).toFixed(2)}
                 </td>
@@ -199,7 +222,7 @@ export default function ItemsTable({
             {items.length === 0 && (
               <tr>
                 <td
-                  colSpan={7}
+                  colSpan={8}
                   className="px-6 py-4 text-center text-gray-500 italic"
                 >
                   Nenhum item neste grupo
@@ -286,6 +309,14 @@ export default function ItemsTable({
                 packageTax[pkgId] || 0
               ).toFixed(2)}`}</span>
             </p>
+            <p className="mb-1 flex justify-between">
+              <span className="font-medium mr-1">💿 Subtotal Itens:</span>
+              <span className="text-gray-900 font-semibold">
+                {`R$ ${items
+                  .reduce((sum, it) => sum + calculateItemTotal(it.id), 0)
+                  .toFixed(2)}`}
+              </span>
+            </p>
             <p>
               <span className="font-medium mr-1">➡️ Subtotal Pacote:</span>
               <span className="text-gray-900 font-semibold">
@@ -332,10 +363,30 @@ export default function ItemsTable({
         {allItems.length > 0 && (
           <div className="mt-6 flex justify-end">
             <div className="bg-gray-100 px-6 py-4 rounded-lg">
-              <span className="text-gray-700 font-medium">Gasto Geral: </span>
-              <span className="text-lg font-bold text-gray-900">
-                R$ {calculateGrandTotal().toFixed(2)}
-              </span>
+              <div className="flex items-center gap-6">
+                <div>
+                  <span className="text-gray-700 font-medium mr-1">Lucro:</span>
+                  <span className="text-lg font-bold text-gray-900">
+                    {(() => {
+                      const sellingTotal = allItems.reduce((sum, it) => {
+                        const qty = quantities[it.id] ?? 1;
+                        const sell = sellingPrices[it.id] || 0;
+                        return sum + qty * sell;
+                      }, 0);
+                      const profit = sellingTotal - calculateGrandTotal();
+                      return `R$ ${profit.toFixed(2)}`;
+                    })()}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-gray-700 font-medium mr-1">
+                    Gasto Geral:
+                  </span>
+                  <span className="text-lg font-bold text-gray-900">
+                    R$ {calculateGrandTotal().toFixed(2)}
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
         )}

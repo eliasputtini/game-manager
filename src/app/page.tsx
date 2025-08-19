@@ -38,6 +38,7 @@ export default function Home() {
   // Add these new state variables at the top with other useState declarations
   const [quantities, setQuantities] = useState<{ [key: string]: number }>({});
   const [prices, setPrices] = useState<{ [key: string]: number }>({});
+  const [sellingPrices, setSellingPrices] = useState<{ [key: string]: number }>({});
   // Debounce state
   const [debouncedQuery, setDebouncedQuery] = useState<string>("");
   // Loading state for API search
@@ -165,6 +166,11 @@ export default function Home() {
           );
           setQuantities(prune<number>(state.quantities));
           setPrices(prune<number>(state.prices));
+          setSellingPrices(
+            prune<number>(
+              (state as { sellingPrices?: Record<string, number> }).sellingPrices
+            )
+          );
           setPackageFreight(state.packageFreight || {});
           setPackageTax(state.packageTax || {});
           if (typeof state.packageCounter === "number")
@@ -186,6 +192,7 @@ export default function Home() {
           setPackageFreight({});
           setPackageTax({});
           setPackageCounter(1);
+          setSellingPrices({});
           hydratedRef.current = true; // initial load complete
           skipNextSaveRef.current = true; // skip the first save
         }
@@ -239,6 +246,7 @@ export default function Home() {
           })),
           quantities: prune<number>(quantities),
           prices: prune<number>(prices),
+          sellingPrices: prune<number>(sellingPrices),
           packageFreight,
           packageTax,
           packageCounter,
@@ -261,16 +269,15 @@ export default function Home() {
     targetPackages,
     quantities,
     prices,
+    sellingPrices,
     packageFreight,
     packageTax,
     packageCounter,
   ]);
 
-  // Debounce effect: wait after user stops typing
+  // Debounce search input into debouncedQuery
   useEffect(() => {
-    const t = setTimeout(() => {
-      setDebouncedQuery(searchQuery.trim());
-    }, 1000);
+    const t = setTimeout(() => setDebouncedQuery(searchQuery), 500);
     return () => clearTimeout(t);
   }, [searchQuery]);
 
@@ -707,6 +714,11 @@ export default function Home() {
       return rest;
     });
     setPrices((prev) => {
+      const rest = { ...prev };
+      delete rest[game.id];
+      return rest;
+    });
+    setSellingPrices((prev) => {
       const rest = { ...prev };
       delete rest[game.id];
       return rest;
@@ -1165,8 +1177,10 @@ export default function Home() {
         onDeleteTargetPackage={onDeleteTargetPackage}
         quantities={quantities}
         prices={prices}
+        sellingPrices={sellingPrices}
         setQuantities={setQuantities}
         setPrices={setPrices}
+        setSellingPrices={setSellingPrices}
         calculateItemTotal={calculateItemTotal}
         calculateGrandTotal={calculateGrandTotal}
       />
