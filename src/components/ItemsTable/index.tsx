@@ -4,9 +4,23 @@ import type { Game } from "@/types";
 
 type Quantities = { [key: string]: number };
 
+type Pkg = { id: string; name: string; items: Game[] };
+
 type Props = {
   sourceItems: Game[];
   targetItems: Game[];
+  sourcePackages: Pkg[];
+  targetPackages: Pkg[];
+  packageFreight: Record<string, number>;
+  setPackageFreight: React.Dispatch<
+    React.SetStateAction<Record<string, number>>
+  >;
+  packageTax: Record<string, number>;
+  setPackageTax: React.Dispatch<
+    React.SetStateAction<Record<string, number>>
+  >;
+  onDeleteSourcePackage: (pkgId: string) => void;
+  onDeleteTargetPackage: (pkgId: string) => void;
   quantities: Quantities;
   prices: Quantities;
   setQuantities: React.Dispatch<React.SetStateAction<Quantities>>;
@@ -18,6 +32,14 @@ type Props = {
 export default function ItemsTable({
   sourceItems,
   targetItems,
+  sourcePackages,
+  targetPackages,
+  packageFreight,
+  setPackageFreight,
+  packageTax,
+  setPackageTax,
+  onDeleteSourcePackage,
+  onDeleteTargetPackage,
   quantities,
   prices,
   setQuantities,
@@ -25,131 +47,255 @@ export default function ItemsTable({
   calculateItemTotal,
   calculateGrandTotal,
 }: Props) {
-  const allItems = [...sourceItems, ...targetItems];
+  const allItems = [
+    ...sourceItems,
+    ...targetItems,
+    ...sourcePackages.flatMap((p) => p.items),
+    ...targetPackages.flatMap((p) => p.items),
+  ];
+
+  const renderTable = (
+    title: string,
+    items: Game[],
+    status: "Disponível" | "Em Destino",
+    keyProp?: string,
+    pkgId?: string
+  ) => (
+    <div className="mt-8" key={keyProp}>
+      <div className="group flex items-center justify-start gap-2 mb-3">
+        <h3 className="text-lg font-semibold text-gray-800">{title}</h3>
+        {pkgId && (
+          <button
+            type="button"
+            onClick={() =>
+              status === "Disponível"
+                ? onDeleteSourcePackage(pkgId)
+                : onDeleteTargetPackage(pkgId)
+            }
+            className="opacity-0 group-hover:opacity-100 transition-opacity text-red-600 hover:text-red-700 p-1 rounded hover:bg-red-50"
+            title={
+              status === "Disponível"
+                ? "Excluir pacote (mantém itens como soltos)"
+                : "Excluir pacote do destino (mantém itens como soltos)"
+            }
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="w-4 h-4"
+            >
+              <path d="M3 6h18" />
+              <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+              <path d="M10 11v6" />
+              <path d="M14 11v6" />
+            </svg>
+          </button>
+        )}
+        <span
+          className={`px-2 py-1 text-xs rounded-full ${
+            status === "Disponível"
+              ? "bg-green-100 text-green-700"
+              : "bg-blue-100 text-blue-700"
+          }`}
+        >
+          {status}
+        </span>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm text-left text-gray-600">
+          <thead className="text-xs uppercase bg-gray-100">
+            <tr>
+              <th className="px-6 py-3 rounded-tl-lg">ID</th>
+              <th className="px-6 py-3">Título</th>
+              <th className="px-6 py-3">Categoria</th>
+              <th className="px-6 py-3">Região</th>
+              <th className="px-6 py-3">Quantidade</th>
+              <th className="px-6 py-3">Preço (R$)</th>
+              <th className="px-6 py-3 rounded-tr-lg">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((item) => (
+              <tr
+                key={item.id}
+                className="border-b border-gray-200 hover:bg-gray-50"
+              >
+                <td className="px-6 py-4 font-medium">{item.id}</td>
+                <td className="px-6 py-4">{item.title}</td>
+                <td className="px-6 py-4">
+                  <span className="px-2 py-1 text-xs bg-indigo-100 text-indigo-700 rounded-full">
+                    {item.category}
+                  </span>
+                </td>
+                <td className="px-6 py-4">
+                  <div className="flex items-center gap-2">
+                    {(item.region_id === 1 || item.region_id === 8) && (
+                      <>
+                        <Image src="/us.png" alt="US" width={32} height={32} />
+                        <span className="text-xs text-gray-700">US</span>
+                      </>
+                    )}
+                    {item.region_id === 4 && (
+                      <>
+                        <Image src="/jp.png" alt="JP" width={32} height={32} />
+                        <span className="text-xs text-gray-700">JP</span>
+                      </>
+                    )}
+                    {!item.region_id && (
+                      <span className="text-xs text-gray-400">-</span>
+                    )}
+                  </div>
+                </td>
+                <td className="px-6 py-4">
+                  <input
+                    type="number"
+                    min="0"
+                    value={quantities[item.id] ?? 1}
+                    onChange={(e) =>
+                      setQuantities((prev) => ({
+                        ...prev,
+                        [item.id]: Number(e.target.value),
+                      }))
+                    }
+                    className="w-20 px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </td>
+                <td className="px-6 py-4">
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={prices[item.id] || ""}
+                    onChange={(e) =>
+                      setPrices((prev) => ({
+                        ...prev,
+                        [item.id]: Number(e.target.value),
+                      }))
+                    }
+                    className="w-24 px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </td>
+                <td className="px-6 py-4 font-medium">
+                  R$ {calculateItemTotal(item.id).toFixed(2)}
+                </td>
+              </tr>
+            ))}
+            {items.length === 0 && (
+              <tr>
+                <td
+                  colSpan={7}
+                  className="px-6 py-4 text-center text-gray-500 italic"
+                >
+                  Nenhum item neste grupo
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+      {typeof pkgId === "string" && (
+        <div className="mt-3 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+          <div className="flex items-center gap-4 flex-wrap">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-700">➡️ Frete:</span>
+              <div className="flex items-center gap-2">
+                <span className="text-gray-600">R$</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={packageFreight[pkgId] ?? 0}
+                  onChange={(e) =>
+                    setPackageFreight((prev) => ({
+                      ...prev,
+                      [pkgId]: Number(e.target.value),
+                    }))
+                  }
+                  className="w-28 px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-900"
+                />
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-700">🧾 Imposto:</span>
+              <div className="flex items-center gap-2">
+                <span className="text-gray-600">R$</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={packageTax[pkgId] ?? 0}
+                  onChange={(e) =>
+                    setPackageTax((prev) => ({
+                      ...prev,
+                      [pkgId]: Number(e.target.value),
+                    }))
+                  }
+                  className="w-28 px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-900"
+                />
+              </div>
+            </div>
+          </div>
+          <div className="text-sm text-gray-800">
+            <p className="mb-1 flex justify-between">
+              <span className="font-medium mr-1">➡️ Frete:</span>
+              <span className="text-gray-900 font-semibold">{`R$ ${(
+                packageFreight[pkgId] || 0
+              ).toFixed(2)}`}</span>
+            </p>
+            <p className="mb-1 flex justify-between">
+              <span className="font-medium mr-1">🧾 Imposto:</span>
+              <span className="text-gray-900 font-semibold">{`R$ ${(
+                packageTax[pkgId] || 0
+              ).toFixed(2)}`}</span>
+            </p>
+            <p>
+              <span className="font-medium mr-1">➡️ Subtotal Pacote:</span>
+              <span className="text-gray-900 font-semibold">
+                {(() => {
+                  const itemsSubtotal = items.reduce(
+                    (sum, it) => sum + calculateItemTotal(it.id),
+                    0
+                  );
+                  const freight = packageFreight[pkgId] || 0;
+                  const tax = packageTax[pkgId] || 0;
+                  return `R$ ${(itemsSubtotal + freight + tax).toFixed(2)}`;
+                })()}
+              </span>
+            </p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 
   return (
     <div className="max-w-6xl mx-auto mt-16">
       <div className="bg-white/95 backdrop-blur rounded-2xl p-6 shadow-xl border border-white/20">
         <h2 className="text-xl font-semibold mb-6 text-center text-gray-800">
-          📊 Resumo dos Itens
+          📊 Resumo por Pacotes
         </h2>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm text-left text-gray-600">
-            <thead className="text-xs uppercase bg-gray-100">
-              <tr>
-                <th className="px-6 py-3 rounded-tl-lg">ID</th>
-                <th className="px-6 py-3">Título</th>
-                <th className="px-6 py-3">Categoria</th>
-                <th className="px-6 py-3">Região</th>
-                <th className="px-6 py-3">Status</th>
-                <th className="px-6 py-3">Quantidade</th>
-                <th className="px-6 py-3">Preço (R$)</th>
-                <th className="px-6 py-3 rounded-tr-lg">Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {allItems.map((item) => (
-                <tr
-                  key={item.id}
-                  className="border-b border-gray-200 hover:bg-gray-50"
-                >
-                  <td className="px-6 py-4 font-medium">{item.id}</td>
-                  <td className="px-6 py-4">{item.title}</td>
-                  <td className="px-6 py-4">
-                    <span className="px-2 py-1 text-xs bg-indigo-100 text-indigo-700 rounded-full">
-                      {item.category}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-2">
-                      {(item.region_id === 1 || item.region_id === 8) && (
-                        <>
-                          <Image
-                            src="/us.png"
-                            alt="US"
-                            width={32}
-                            height={32}
-                          />
-                          <span className="text-xs text-gray-700">US</span>
-                        </>
-                      )}
-                      {item.region_id === 4 && (
-                        <>
-                          <Image
-                            src="/jp.png"
-                            alt="JP"
-                            width={32}
-                            height={32}
-                          />
-                          <span className="text-xs text-gray-700">JP</span>
-                        </>
-                      )}
-                      {!item.region_id && (
-                        <span className="text-xs text-gray-400">-</span>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span
-                      className={`px-2 py-1 text-xs rounded-full ${
-                        sourceItems.find((s) => s.id === item.id)
-                          ? "bg-green-100 text-green-700"
-                          : "bg-blue-100 text-blue-700"
-                      }`}
-                    >
-                      {sourceItems.find((s) => s.id === item.id)
-                        ? "Disponível"
-                        : "Em Destino"}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <input
-                      type="number"
-                      min="0"
-                      value={quantities[item.id] ?? 1}
-                      onChange={(e) =>
-                        setQuantities((prev) => ({
-                          ...prev,
-                          [item.id]: Number(e.target.value),
-                        }))
-                      }
-                      className="w-20 px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    />
-                  </td>
-                  <td className="px-6 py-4">
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={prices[item.id] || ""}
-                      onChange={(e) =>
-                        setPrices((prev) => ({
-                          ...prev,
-                          [item.id]: Number(e.target.value),
-                        }))
-                      }
-                      className="w-24 px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    />
-                  </td>
-                  <td className="px-6 py-4 font-medium">
-                    R$ {calculateItemTotal(item.id).toFixed(2)}
-                  </td>
-                </tr>
-              ))}
-              {allItems.length === 0 && (
-                <tr>
-                  <td
-                    colSpan={8}
-                    className="px-6 py-4 text-center text-gray-500 italic"
-                  >
-                    Nenhum item adicionado ainda
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+        {/* Tabelas para Itens Soltos */}
+        {sourceItems.length > 0 &&
+          renderTable("Itens soltos (Disponíveis)", sourceItems, "Disponível")}
+        {targetItems.length > 0 &&
+          renderTable("Itens soltos (Destino)", targetItems, "Em Destino")}
+
+        {/* Tabelas por Pacote (Origem) */}
+        {sourcePackages.map((pkg) =>
+          renderTable(`${pkg.name}`, pkg.items, "Disponível", pkg.id, pkg.id)
+        )}
+
+        {/* Tabelas por Pacote (Destino) */}
+        {targetPackages.map((pkg) =>
+          renderTable(`${pkg.name}`, pkg.items, "Em Destino", pkg.id, pkg.id)
+        )}
 
         {allItems.length > 0 && (
           <div className="mt-6 flex justify-end">

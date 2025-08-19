@@ -14,6 +14,12 @@ import DragCard from "@/components/DragCard";
 import ItemsTable from "@/components/ItemsTable";
 import Footer from "@/components/Footer";
 
+declare global {
+  interface Window {
+    __onWindowDragOver?: (ev: DragEvent) => void;
+  }
+}
+
 // Region constants
 const US_REGION_IDS = [1, 8] as const;
 
@@ -50,6 +56,17 @@ export default function Home() {
       items: Game[];
     }[]
   >([]);
+  const [targetPackages, setTargetPackages] = useState<
+    {
+      id: string;
+      name: string;
+      items: Game[];
+    }[]
+  >([]);
+  // Frete por pacote (origem e destino compartilham o mesmo id)
+  const [packageFreight, setPackageFreight] = useState<Record<string, number>>({});
+  // Imposto por pacote
+  const [packageTax, setPackageTax] = useState<Record<string, number>>({});
   const [packageCounter, setPackageCounter] = useState<number>(1);
 
   // Refs to avoid effect re-running on list changes
@@ -191,6 +208,58 @@ export default function Home() {
     }
   };
 
+  // Remove a package from source and move its items to loose source items
+  const onDeleteSourcePackage = (pkgId: string) => {
+    setPackages((prev) => {
+      const pkg = prev.find((p) => p.id === pkgId);
+      if (!pkg) return prev;
+      // Move items to sourceItems (dedupe by id)
+      setSourceItems((sPrev) => {
+        const merged = [...sPrev, ...pkg.items];
+        const byId: Record<string | number, boolean> = {};
+        return merged.filter((it) => (byId[it.id] ? false : (byId[it.id] = true)));
+      });
+      // Clear freight/tax for this package
+      setPackageFreight((pf) => {
+        const rest = { ...pf };
+        delete rest[pkgId];
+        return rest;
+      });
+      setPackageTax((pt) => {
+        const rest = { ...pt };
+        delete rest[pkgId];
+        return rest;
+      });
+      // Remove package
+      return prev.filter((p) => p.id !== pkgId);
+    });
+  };
+
+  // Remove a package from target and move its items back to Disponíveis (sourceItems)
+  const onDeleteTargetPackage = (pkgId: string) => {
+    setTargetPackages((prev) => {
+      const pkg = prev.find((p) => p.id === pkgId);
+      if (!pkg) return prev;
+      // Move items to sourceItems (dedupe by id)
+      setSourceItems((sPrev) => {
+        const merged = [...sPrev, ...pkg.items];
+        const byId: Record<string | number, boolean> = {};
+        return merged.filter((it) => (byId[it.id] ? false : (byId[it.id] = true)));
+      });
+      // Clear freight/tax for this package
+      setPackageFreight((pf) => {
+        const { [pkgId]: _f, ...rest } = pf;
+        return rest;
+      });
+      setPackageTax((pt) => {
+        const { [pkgId]: _t, ...rest } = pt;
+        return rest;
+      });
+      // Remove package
+      return prev.filter((p) => p.id !== pkgId);
+    });
+  };
+
   // Função para limpar o estado de drag
   const clearDragState = () => {
     setDraggedItem(null);
@@ -210,7 +279,7 @@ export default function Home() {
     const onWindowDragOver = (ev: DragEvent) => {
       lastPointerRef.current = { x: ev.clientX, y: ev.clientY };
     };
-    (window as any).__onWindowDragOver = onWindowDragOver;
+    window.__onWindowDragOver = onWindowDragOver;
     window.addEventListener("dragover", onWindowDragOver);
   };
 
@@ -219,12 +288,10 @@ export default function Home() {
     const current = draggedItem;
     setTimeout(() => {
       // Cleanup listener
-      const onWindowDragOver = (window as any).__onWindowDragOver as
-        | ((ev: DragEvent) => void)
-        | undefined;
+      const onWindowDragOver = window.__onWindowDragOver;
       if (onWindowDragOver) {
         window.removeEventListener("dragover", onWindowDragOver);
-        (window as any).__onWindowDragOver = undefined;
+        window.__onWindowDragOver = undefined;
       }
 
       if (!wasDroppedRef.current && current) {
@@ -278,6 +345,7 @@ export default function Home() {
       ...sourceItems,
       ...targetItems,
       ...packages.flatMap((p) => p.items),
+      ...targetPackages.flatMap((p) => p.items),
     ].find((it) => it.id === draggedId);
 
     if (!item) return;
@@ -285,8 +353,14 @@ export default function Home() {
     if (targetArea === "source") {
       // Move para área de origem (sempre adiciona ao source)
       setTargetItems((prev) => prev.filter((i) => i.id !== item.id));
-      // Remove de todos os pacotes
+      // Remove de todos os pacotes (origem e destino)
       setPackages((prev) =>
+        prev.map((p) => ({
+          ...p,
+          items: p.items.filter((i) => i.id !== item.id),
+        }))
+      );
+      setTargetPackages((prev) =>
         prev.map((p) => ({
           ...p,
           items: p.items.filter((i) => i.id !== item.id),
@@ -299,8 +373,14 @@ export default function Home() {
     } else if (targetArea === "target") {
       // Move para área de destino (sempre adiciona ao target)
       setSourceItems((prev) => prev.filter((i) => i.id !== item.id));
-      // Remove de todos os pacotes
+      // Remove de todos os pacotes (origem e destino)
       setPackages((prev) =>
+        prev.map((p) => ({
+          ...p,
+          items: p.items.filter((i) => i.id !== item.id),
+        }))
+      );
+      setTargetPackages((prev) =>
         prev.map((p) => ({
           ...p,
           items: p.items.filter((i) => i.id !== item.id),
@@ -333,6 +413,42 @@ export default function Home() {
             : p
         );
       });
+      // Remove de todos os pacotes de destino
+      setTargetPackages((prev) =>
+        prev.map((p) => ({
+          ...p,
+          items: p.items.filter((i) => i.id !== item.id),
+        }))
+      );
+    } else if (targetArea.startsWith("tpackage:")) {
+      // Move para um pacote da Área de Destino (atômico)
+      const pkgId = targetArea.split(":")[1];
+      // 1) Remove do destino e origem (listas soltas)
+      setTargetItems((prev) => prev.filter((i) => i.id !== item.id));
+      setSourceItems((prev) => prev.filter((i) => i.id !== item.id));
+      // 2) Remove de todos os pacotes (origem e destino) e adiciona ao escolhido (destino)
+      setPackages((prev) =>
+        prev.map((p) => ({
+          ...p,
+          items: p.items.filter((i) => i.id !== item.id),
+        }))
+      );
+      setTargetPackages((prev) => {
+        const cleaned = prev.map((p) => ({
+          ...p,
+          items: p.items.filter((i) => i.id !== item.id),
+        }));
+        return cleaned.map((p) =>
+          p.id === pkgId
+            ? {
+                ...p,
+                items: p.items.some((i) => i.id === item.id)
+                  ? p.items
+                  : [...p.items, item],
+              }
+            : p
+        );
+      });
     }
   };
 
@@ -344,6 +460,49 @@ export default function Home() {
       { id: newId, name: `Pacote ${packageCounter + 1}`, items: [] },
     ]);
     setPackageCounter((c) => c + 1);
+    // Inicializa frete do pacote como 0
+    setPackageFreight((prev) => ({ ...prev, [newId]: prev[newId] ?? 0 }));
+    // Inicializa imposto do pacote como 0
+    setPackageTax((prev) => ({ ...prev, [newId]: prev[newId] ?? 0 }));
+  };
+
+  // Enviar pacote inteiro para a Área de Destino
+  const sendPackageToTarget = (pkgId: string) => {
+    setPackages((prev) => {
+      const pkg = prev.find((p) => p.id === pkgId);
+      if (!pkg) return prev;
+
+      // 1) Limpa itens desse pacote de listas soltas e pacotes destino
+      setTargetItems((tprev) => tprev.filter((i) => !pkg.items.some((pi) => pi.id === i.id)));
+      setSourceItems((sprev) => sprev.filter((i) => !pkg.items.some((pi) => pi.id === i.id)));
+      setTargetPackages((tp) => tp.map((p) => ({
+        ...p,
+        items: p.items.filter((i) => !pkg.items.some((pi) => pi.id === i.id)),
+      })));
+
+      // 2) Move o pacote inteiro para a Área de Destino (mantendo agrupado)
+      setTargetPackages((tpPrev) => {
+        const exists = tpPrev.some((p) => p.id === pkg.id);
+        if (exists) {
+          // merge itens se um pacote com mesmo id já existir por algum motivo
+          return tpPrev.map((p) =>
+            p.id === pkg.id
+              ? {
+                  ...p,
+                  items: [
+                    ...p.items,
+                    ...pkg.items.filter((i) => !p.items.some((ei) => ei.id === i.id)),
+                  ],
+                }
+              : p
+          );
+        }
+        return [...tpPrev, { ...pkg }];
+      });
+
+      // 3) Remove o pacote da lista de pacotes de origem
+      return prev.filter((p) => p.id !== pkgId);
+    });
   };
 
   // Remove item from any list (source, target, packages)
@@ -351,6 +510,12 @@ export default function Home() {
     setSourceItems((prev) => prev.filter((i) => i.id !== game.id));
     setTargetItems((prev) => prev.filter((i) => i.id !== game.id));
     setPackages((prev) =>
+      prev.map((p) => ({
+        ...p,
+        items: p.items.filter((i) => i.id !== game.id),
+      }))
+    );
+    setTargetPackages((prev) =>
       prev.map((p) => ({
         ...p,
         items: p.items.filter((i) => i.id !== game.id),
@@ -365,9 +530,26 @@ export default function Home() {
   };
 
   const calculateGrandTotal = () => {
-    return [...sourceItems, ...targetItems].reduce((total, item) => {
-      return total + calculateItemTotal(item.id);
-    }, 0);
+    const all = [
+      ...sourceItems,
+      ...targetItems,
+      ...packages.flatMap((p) => p.items),
+      ...targetPackages.flatMap((p) => p.items),
+    ];
+    const itemsTotal = all.reduce(
+      (total, item) => total + calculateItemTotal(item.id),
+      0
+    );
+    const pkgIds = [
+      ...packages.map((p) => p.id),
+      ...targetPackages.map((p) => p.id),
+    ];
+    const freightTotal = pkgIds.reduce(
+      (sum, id) => sum + (packageFreight[id] || 0),
+      0
+    );
+    const taxTotal = pkgIds.reduce((sum, id) => sum + (packageTax[id] || 0), 0);
+    return itemsTotal + freightTotal + taxTotal;
   };
 
   return (
@@ -585,7 +767,49 @@ export default function Home() {
               {packages.map((pkg) => (
                 <div key={pkg.id} className="">
                   <div className="flex items-center justify-between mb-2">
-                    <div className="font-medium text-gray-700">{pkg.name}</div>
+                    <div className="flex items-center gap-2 group">
+                      <div className="font-medium text-gray-700">{pkg.name}</div>
+                      <button
+                        type="button"
+                        onClick={() => onDeleteSourcePackage(pkg.id)}
+                        className="opacity-0 group-hover:opacity-100 transition-opacity text-red-600 hover:text-red-700 p-1 rounded hover:bg-red-50"
+                        title="Excluir pacote (itens voltam para Disponíveis)"
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          className="w-4 h-4"
+                        >
+                          <path d="M3 6h18" />
+                          <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                          <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                          <path d="M10 11v6" />
+                          <path d="M14 11v6" />
+                        </svg>
+                      </button>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => sendPackageToTarget(pkg.id)}
+                      className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-sm text-blue-700 hover:bg-blue-50"
+                      title="Enviar pacote para Área de Destino"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 24 24"
+                        fill="currentColor"
+                        className="w-4 h-4"
+                        aria-hidden="true"
+                      >
+                        <path d="M12 4a1 1 0 011 1v6h6a1 1 0 110 2h-6v6a1 1 0 11-2 0v-6H5a1 1 0 110-2h6V5a1 1 0 011-1z" />
+                      </svg>
+                      Enviar
+                    </button>
                   </div>
                   <div
                     className={`min-h-40 border-2 border-dashed rounded-xl p-4 transition-all duration-300 ${
@@ -662,13 +886,89 @@ export default function Home() {
               )}
             </div>
           </div>
+
+          {/* Target Packages list */}
+          {targetPackages.length > 0 && (
+            <div className="mt-6 space-y-4">
+              {targetPackages.map((pkg) => (
+                <div key={pkg.id} className="">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2 group">
+                      <div className="font-medium text-gray-700">{pkg.name}</div>
+                      <button
+                        type="button"
+                        onClick={() => onDeleteTargetPackage(pkg.id)}
+                        className="opacity-0 group-hover:opacity-100 transition-opacity text-red-600 hover:text-red-700 p-1 rounded hover:bg-red-50"
+                        title="Excluir pacote do destino (itens voltam para Disponíveis)"
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          className="w-4 h-4"
+                        >
+                          <path d="M3 6h18" />
+                          <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                          <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                          <path d="M10 11v6" />
+                          <path d="M14 11v6" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                  <div
+                    className={`min-h-40 border-2 border-dashed rounded-xl p-4 transition-all duration-300 ${
+                      dragOver === `tpackage:${pkg.id}`
+                        ? "border-blue-400 bg-blue-50 scale-102"
+                        : "border-gray-300"
+                    }`}
+                    onDragOver={(e) => handleDragOver(e, `tpackage:${pkg.id}`)}
+                    onDragLeave={(e) => handleDragLeave(e)}
+                    onDrop={(e) => handleDrop(e, `tpackage:${pkg.id}`)}
+                  >
+                    <div className="space-y-4">
+                      {pkg.items.map((item) => (
+                        <DragCard
+                          key={item.id}
+                          item={item}
+                          isDragging={draggedItem?.id === item.id}
+                          handleDragStart={handleDragStart}
+                          handleDragEnd={handleDragEnd}
+                          clearDragState={clearDragState}
+                          draggedItem={draggedItem}
+                          onDelete={handleDeleteItem}
+                        />
+                      ))}
+                      {pkg.items.length === 0 && (
+                        <div className="text-center text-gray-400 italic py-6 text-sm">
+                          Arraste itens para este pacote (destino)
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
       {/* Table Section */}
       <ItemsTable
-        sourceItems={[...sourceItems, ...packages.flatMap((p) => p.items)]}
+        sourceItems={sourceItems}
         targetItems={targetItems}
+        sourcePackages={packages}
+        targetPackages={targetPackages}
+        packageFreight={packageFreight}
+        setPackageFreight={setPackageFreight}
+        packageTax={packageTax}
+        setPackageTax={setPackageTax}
+        onDeleteSourcePackage={onDeleteSourcePackage}
+        onDeleteTargetPackage={onDeleteTargetPackage}
         quantities={quantities}
         prices={prices}
         setQuantities={setQuantities}
