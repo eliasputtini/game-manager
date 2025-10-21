@@ -38,7 +38,9 @@ export default function Home() {
   // Add these new state variables at the top with other useState declarations
   const [quantities, setQuantities] = useState<{ [key: string]: number }>({});
   const [prices, setPrices] = useState<{ [key: string]: number }>({});
-  const [sellingPrices, setSellingPrices] = useState<{ [key: string]: number }>({});
+  const [sellingPrices, setSellingPrices] = useState<{ [key: string]: number }>(
+    {}
+  );
   // Debounce state
   const [debouncedQuery, setDebouncedQuery] = useState<string>("");
   // Loading state for API search
@@ -168,7 +170,8 @@ export default function Home() {
           setPrices(prune<number>(state.prices));
           setSellingPrices(
             prune<number>(
-              (state as { sellingPrices?: Record<string, number> }).sellingPrices
+              (state as { sellingPrices?: Record<string, number> })
+                .sellingPrices
             )
           );
           setPackageFreight(state.packageFreight || {});
@@ -757,7 +760,7 @@ export default function Home() {
   return (
     <div className="font-sans min-h-screen p-8 pb-20 bg-gradient-to-br from-slate-50 to-slate-100">
       {/* Header */}
-      <div className="max-w-6xl mx-auto mb-12 text-center">
+      <div className="max-w-7xl mx-auto mb-12 text-center">
         <Image
           className="mx-auto mb-6"
           src="/PlayStation.png"
@@ -775,7 +778,7 @@ export default function Home() {
       </div>
 
       {/* Search Section */}
-      <div className="max-w-6xl mx-auto mb-8">
+      <div className="max-w-7xl mx-auto mb-8">
         <div className="bg-white/95 backdrop-blur rounded-2xl p-6 shadow-xl border border-white/20">
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-xl font-semibold text-gray-800">
@@ -797,6 +800,7 @@ export default function Home() {
                     alt="United States flag"
                     width={32}
                     height={32}
+                    unoptimized
                     priority={false}
                   />
                 </button>
@@ -811,6 +815,7 @@ export default function Home() {
                   <Image
                     src="/jp.png"
                     alt="Japan flag"
+                    unoptimized
                     width={32}
                     height={32}
                     priority={false}
@@ -822,7 +827,7 @@ export default function Home() {
                 <button
                   type="button"
                   onClick={() => setIncludePS1((v) => !v)}
-                  className={`px-3 py-1 rounded-lg border text-sm transition ${
+                  className={`px-3 py-1  rounded-lg border text-sm transition ${
                     includePS1
                       ? "bg-indigo-600 text-white border-indigo-600"
                       : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
@@ -906,7 +911,7 @@ export default function Home() {
       {/* Drag and Drop Areas */}
       <div
         ref={containerRef}
-        className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-8"
+        className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-8"
       >
         {/* Source Area */}
         <div className="bg-white/95 backdrop-blur rounded-2xl p-6 shadow-xl border border-white/20">

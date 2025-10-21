@@ -110,17 +110,18 @@ export default function ItemsTable({
         </span>
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full text-sm text-left text-gray-600">
+        <table className="w-full text-sm text-left text-gray-600 table-fixed">
           <thead className="text-xs uppercase bg-gray-100">
             <tr>
-              <th className="px-6 py-3 rounded-tl-lg">ID</th>
-              <th className="px-6 py-3">Título</th>
-              <th className="px-6 py-3">Categoria</th>
-              <th className="px-6 py-3">Região</th>
-              <th className="px-6 py-3">Quantidade</th>
-              <th className="px-6 py-3">Preço (R$)</th>
-              <th className="px-6 py-3">Preço Venda (R$)</th>
-              <th className="px-6 py-3 rounded-tr-lg">Total</th>
+              <th className="px-6 py-3 rounded-tl-lg w-64">Título</th>
+              <th className="px-6 py-3 w-28">Categoria</th>
+              <th className="px-6 py-3 w-28">Região</th>
+              <th className="px-6 py-3 w-28">Quantidade</th>
+              <th className="px-6 py-3 w-28 text-right">Preço (R$)</th>
+              <th className="px-6 py-3 w-28 text-right">Preço Venda (R$)</th>
+              <th className="px-6 py-3 w-28 text-right">Frete (R$)</th>
+              <th className="px-6 py-3 w-28 text-right">Imposto (R$)</th>
+              <th className="px-6 py-3 rounded-tr-lg w-32 text-right">Total</th>
             </tr>
           </thead>
           <tbody>
@@ -129,24 +130,50 @@ export default function ItemsTable({
                 key={item.id}
                 className="border-b border-gray-200 hover:bg-gray-50"
               >
-                <td className="px-6 py-4 font-medium">{item.id}</td>
-                <td className="px-6 py-4">{item.title}</td>
+                <td className="px-6 py-4 truncate">{item.title}</td>
                 <td className="px-6 py-4">
-                  <span className="px-2 py-1 text-xs bg-indigo-100 text-indigo-700 rounded-full">
-                    {item.category}
-                  </span>
+                  {item.category === "PS1" || item.category === "PS2" ? (
+                    <div className="inline-flex items-center gap-2">
+                      <Image
+                        src={item.category === "PS1" ? "/ps1.png" : "/ps2.png"}
+                        alt={String(item.category)}
+                        unoptimized
+                        width={32}
+                        height={32}
+                      />
+                      <span className="text-xs text-gray-700">
+                        {item.category}
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="px-2 py-1 text-xs bg-indigo-100 text-indigo-700 rounded-full">
+                      {item.category}
+                    </span>
+                  )}
                 </td>
                 <td className="px-6 py-4">
                   <div className="flex items-center gap-2">
                     {(item.region_id === 1 || item.region_id === 8) && (
                       <>
-                        <Image src="/us.png" alt="US" width={32} height={32} />
+                        <Image
+                          src="/us.png"
+                          alt="US"
+                          width={32}
+                          height={32}
+                          unoptimized
+                        />
                         <span className="text-xs text-gray-700">US</span>
                       </>
                     )}
                     {item.region_id === 4 && (
                       <>
-                        <Image src="/jp.png" alt="JP" width={32} height={32} />
+                        <Image
+                          src="/jp.png"
+                          alt="JP"
+                          width={32}
+                          height={32}
+                          unoptimized
+                        />
                         <span className="text-xs text-gray-700">JP</span>
                       </>
                     )}
@@ -155,7 +182,7 @@ export default function ItemsTable({
                     )}
                   </div>
                 </td>
-                <td className="px-6 py-4">
+                <td className="px-6 py-4 text-right whitespace-nowrap">
                   <input
                     type="number"
                     inputMode="numeric"
@@ -195,7 +222,7 @@ export default function ItemsTable({
                         [item.id]: Number(e.target.value),
                       }))
                     }
-                    className="w-24 px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="w-24 px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 text-right"
                   />
                 </td>
                 <td className="px-6 py-4">
@@ -211,18 +238,72 @@ export default function ItemsTable({
                         [item.id]: Number(e.target.value),
                       }))
                     }
-                    className="w-24 px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="w-24 px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 text-right"
                   />
                 </td>
-                <td className="px-6 py-4 font-medium">
-                  R$ {calculateItemTotal(item.id).toFixed(2)}
+                <td className="px-6 py-4 text-right whitespace-nowrap">
+                  {(() => {
+                    // Freight is split equally among items (same weight assumption)
+                    let allocatedFreight = 0;
+                    if (pkgId) {
+                      const freight = packageFreight[pkgId] || 0;
+                      const itemCount = items.length || 1;
+                      allocatedFreight = freight / itemCount;
+                    }
+                    return <span>R$ {allocatedFreight.toFixed(2)}</span>;
+                  })()}
+                </td>
+                <td className="px-6 py-4 text-right whitespace-nowrap">
+                  {(() => {
+                    const basePaid = calculateItemTotal(item.id);
+                    let allocatedTax = 0;
+                    if (pkgId) {
+                      const tax = packageTax[pkgId] || 0;
+                      const itemsSubtotal = items.reduce(
+                        (sum, it) => sum + calculateItemTotal(it.id),
+                        0
+                      );
+                      if (itemsSubtotal > 0 && tax > 0) {
+                        allocatedTax = (basePaid / itemsSubtotal) * tax;
+                      }
+                    }
+                    return <span>R$ {allocatedTax.toFixed(2)}</span>;
+                  })()}
+                </td>
+                <td className="px-6 py-4 font-medium text-right whitespace-nowrap">
+                  {(() => {
+                    const basePaid = calculateItemTotal(item.id);
+                    let allocatedTax = 0;
+                    let allocatedFreight = 0;
+                    if (pkgId) {
+                      const tax = packageTax[pkgId] || 0;
+                      const itemsSubtotal = items.reduce(
+                        (sum, it) => sum + calculateItemTotal(it.id),
+                        0
+                      );
+                      if (itemsSubtotal > 0 && tax > 0) {
+                        allocatedTax = (basePaid / itemsSubtotal) * tax;
+                      }
+                      const freight = packageFreight[pkgId] || 0;
+                      const itemCount = items.length || 1;
+                      allocatedFreight = freight / itemCount;
+                    }
+                    return (
+                      <>
+                        R${" "}
+                        {(basePaid + allocatedTax + allocatedFreight).toFixed(
+                          2
+                        )}
+                      </>
+                    );
+                  })()}
                 </td>
               </tr>
             ))}
             {items.length === 0 && (
               <tr>
                 <td
-                  colSpan={8}
+                  colSpan={9}
                   className="px-6 py-4 text-center text-gray-500 italic"
                 >
                   Nenhum item neste grupo
@@ -338,7 +419,7 @@ export default function ItemsTable({
   );
 
   return (
-    <div className="max-w-6xl mx-auto mt-16">
+    <div className="max-w-7xl mx-auto mt-16">
       <div className="bg-white/95 backdrop-blur rounded-2xl p-6 shadow-xl border border-white/20">
         <h2 className="text-xl font-semibold mb-6 text-center text-gray-800">
           📊 Gastos por Pacotes

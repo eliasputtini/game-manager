@@ -1,6 +1,6 @@
 export default function Footer() {
   return (
-    <footer className="max-w-6xl mx-auto mt-16 flex gap-2 flex-wrap items-center text-gray-700 justify-center text-sm">
+    <footer className="max-w-7xl mx-auto mt-16 flex gap-2 flex-wrap items-center text-gray-700 justify-center text-sm">
       Copyright © 2025. Made by
       <a
         className="flex items-center gap-2 hover:underline hover:underline-offset-4 text-gray-600 hover:text-gray-800"
